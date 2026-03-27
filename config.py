@@ -28,19 +28,5 @@ MODEL = "gemini-2.0-flash"
 MAX_TOKENS = 1000
 
 # Rounds
-NUM_ROUNDS = 6
-```
+NUM_ROUNDS = 5
 
-Also add `python-dotenv` to your requirements:
-```
-pygame==2.6.1
-google-generativeai>=0.8.0
-python-dotenv>=1.0.0
-```
-
-And make sure your `.gitignore` has:
-```
-.env
-venv/
-__pycache__/
-*.pyc
