@@ -10,6 +10,7 @@ from .patient_card import draw_patient_card
 from .panel import draw_panel
 from .title_screen import TitleScreen
 from .minigame import SurgeryMinigame
+from .loading_screen import LoadingScreen
 
 # Import backend
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -30,6 +31,36 @@ def _load_next_round_async(round_manager, result_container):
         result_container.append(("err", e))
 
 
+def _start_game(screen, fonts, round_manager, outcome_tracker):
+    """
+    Initialises a fresh game, shows loading screen while round 1 loads,
+    returns the first batch of patients.
+    """
+    round_manager.start_game()
+
+    # Start loading round 1 immediately in background
+    container = []
+    t = threading.Thread(
+        target=_load_next_round_async,
+        args=(round_manager, container),
+        daemon=True
+    )
+    t.start()
+
+    # Show loading screen — blocks until text done AND patients ready
+    class _SimpleLoader:
+        def is_ready(self): return bool(container)
+        def get(self): t.join(); return container[0][1] if container[0][0] == "ok" else []
+
+    LoadingScreen(screen, fonts).run(_SimpleLoader())
+
+    t.join()
+    if container and container[0][0] == "ok":
+        return container[0][1]
+    else:
+        return round_manager.start_round()
+
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((W, H))
@@ -47,9 +78,10 @@ def main():
     # ── GAME INIT ─────────────────────────────────────────────────────────
     round_manager   = RoundManager()
     outcome_tracker = OutcomeTracker()
-    round_manager.start_game()
 
-    current_patients = round_manager.start_round()
+    # Loading screen masks the first API call
+    current_patients = _start_game(screen, fonts, round_manager, outcome_tracker)
+
     selected_patient = None
     round_num        = 1
     total_rounds     = 6
@@ -111,11 +143,12 @@ def main():
                     if choice == 'quit':
                         running = False
                     elif choice == 'play':
+                        # Full reset — show loading screen again
+                        round_manager   = RoundManager()
+                        outcome_tracker = OutcomeTracker()
+                        current_patients = _start_game(
+                            screen, fonts, round_manager, outcome_tracker)
                         selected_patient  = None
-                        round_manager     = RoundManager()
-                        outcome_tracker   = OutcomeTracker()
-                        round_manager.start_game()
-                        current_patients  = round_manager.start_round()
                         round_num         = 1
                         family_line       = None
                         family_line_timer = 0
@@ -157,7 +190,7 @@ def main():
                     mg              = SurgeryMinigame(screen, fonts, chosen)
                     minigame_passed = mg.run()
 
-                    # Surgery outcome — minigame result reduces survivability if failed
+                    # Surgery outcome — minigame fail reduces survivability
                     effective_surv = chosen['survivability']
                     if not minigame_passed:
                         effective_surv = max(5, effective_surv - 18)
