@@ -2,9 +2,6 @@ from google import genai
 import json
 import sys
 import os
-from dotenv import load_dotenv
-load_dotenv("/Users/srineeresarapu/University/Hackathon/Ward/.env")
-print("KEY:", os.getenv("GOOGLE_API_KEY"))
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from config import MODEL, MAX_TOKENS, GOOGLE_API_KEY
@@ -26,13 +23,20 @@ def _call_json(prompt: str, system: str = None) -> dict | list:
     """API call that expects JSON back. Strips markdown fences and parses."""
     raw = _call(prompt, system)
     cleaned = raw.replace("```json", "").replace("```", "").strip()
+    # Find the first [ or { and last ] or } to extract just the JSON
+    start = min(
+        cleaned.find('[') if cleaned.find('[') != -1 else len(cleaned),
+        cleaned.find('{') if cleaned.find('{') != -1 else len(cleaned)
+    )
+    end = max(cleaned.rfind(']'), cleaned.rfind('}')) + 1
+    cleaned = cleaned[start:end]
     return json.loads(cleaned)
-    
+
 
 def generate_patients(round_number: int, existing_patients: list) -> list:
     """
     Generate 2-3 new patients for a round.
-    Returns a list of patient dicts.
+    Returns a list of patient dicts matching the UI card format exactly.
     """
     system = (
         "You are generating patients for a hospital triage game. "
@@ -45,10 +49,17 @@ def generate_patients(round_number: int, existing_patients: list) -> list:
 Generate {2 if round_number > 3 else 3} hospital patients for round {round_number} of a triage game.
 
 Rules:
-- Patients are specific, ordinary people 
+- Patients are specific, ordinary people — not symbols
 - One patient should have low survivability (30-50%), one high (75-95%)
-- The quote is something they say right now. Not a plea. Just something true.
-- Examples of good quotes: "I had a dentist appointment tomorrow.", "Can someone check on my dog?", "I don't want to call my sister yet."
+- condition must be short — 2 to 4 words max. Exactly what appears on a hospital card.
+  Good: "Bowel perforation", "Ruptured appendix", "Internal haemorrhage"
+  Bad: "Severe Sepsis from perforated bowel"
+- quote is one short sentence. Something true about them right now. Not a plea.
+  Good: "I'm sorry for all the fuss.", "I have a tax filing due Friday.", "Can someone water my plants?"
+- social_weight: if true, also set social_weight_label to one of:
+  "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
+  If false, set social_weight_label to null.
+- background is one sentence — who they are outside this hospital.
 
 Avoid these names (already in game): {existing_names}
 
@@ -58,18 +69,17 @@ Return a JSON array with this exact structure:
     "id": "unique_string",
     "name": "Full Name",
     "age": 0,
-    "condition": "medical condition name",
+    "condition": "2-4 word condition",
     "severity": 0,
     "survivability": 0,
-    "quote": "what they say",
-    "background": "one sentence. who they are.",
+    "quote": "One sentence.",
     "times_passed": 0,
-    "social_weight": false
+    "social_weight": false,
+    "social_weight_label": null
   }}
 ]
 
-severity is 1-10. survivability is 0-100 (percent chance with treatment).
-Set social_weight to true for 1 in 4 patients (councillor, donor, etc).
+severity is 1-10. survivability is 0-100 (percent with treatment).
 """
     return _call_json(prompt, system)
 
@@ -93,9 +103,10 @@ Current patient:
 Rules:
 - Increase severity by 1-2 (max 10)
 - Decrease survivability by 8-15 (min 5)
-- Change the quote subtly. Less energy. Less hope. 
+- Change the quote subtly — not dramatically. Less energy. Less hope. Not begging.
 - If times_passed >= 2, the quote becomes very short or quiet.
-- Do NOT change name, age, id, background, or social_weight
+- condition stays the same 2-4 word format — do NOT expand it.
+- Do NOT change name, age, id, background, social_weight, or social_weight_label.
 
 Return the full updated patient JSON object.
 """
@@ -120,7 +131,7 @@ Patient: {patient['name']}, {patient['age']}, {patient['condition']}
 Background: {patient['background']}
 Status: {status}
 
-Write one line a family member says right now. 
+Write one line a family member says right now.
 Not dramatic. Not a plea. Just something real and specific.
 Examples: "She asked me to bring her crossword book.", "I drove four hours.", "He hates hospitals. Always has."
 """
