@@ -10,6 +10,7 @@ from .patient_card import draw_patient_card
 from .panel import draw_panel
 from .title_screen import TitleScreen
 from .minigame import SurgeryMinigame
+from .loading_screen import LoadingScreen  # Add this import
 
 # Import backend
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -30,6 +31,20 @@ def _load_next_round_async(round_manager, result_container):
         result_container.append(("err", e))
 
 
+class NextRoundLoader:
+    """Simple wrapper to check if loading is complete"""
+    def __init__(self):
+        self.ready = False
+        self.patients = None
+    
+    def set_ready(self, patients):
+        self.ready = True
+        self.patients = patients
+    
+    def is_ready(self):
+        return self.ready
+
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((W, H))
@@ -44,15 +59,36 @@ def main():
         pygame.quit()
         sys.exit()
 
-    # ── GAME INIT ─────────────────────────────────────────────────────────
-    round_manager   = RoundManager()
+    # ── LOADING SCREEN ────────────────────────────────────────────────────
+    # Create a loader that will be populated by a background thread
+    loader = NextRoundLoader()
+    
+    # Start loading the first round in background while loading screen plays
+    round_manager = RoundManager()
     outcome_tracker = OutcomeTracker()
-    round_manager.start_game()
-
-    current_patients = round_manager.start_round()
+    
+    def load_first_round():
+        try:
+            round_manager.start_game()
+            patients = round_manager.start_round()
+            loader.set_ready(patients)
+        except Exception as e:
+            print(f"Error loading first round: {e}")
+            loader.set_ready([])
+    
+    # Start loading in background
+    load_thread = threading.Thread(target=load_first_round, daemon=True)
+    load_thread.start()
+    
+    # Show loading screen
+    loading = LoadingScreen(screen, fonts)
+    loading.run(loader)  # This blocks until loading is complete
+    
+    # Get the loaded patients
+    current_patients = loader.patients
     selected_patient = None
-    round_num        = 1
-    total_rounds     = 6
+    round_num = 1
+    total_rounds = 6
 
     prompt = Typewriter(
         "Three patients are waiting. One theatre is available. "
@@ -135,6 +171,8 @@ def main():
                     chosen  = current_patients[selected_patient]
                     passed  = [p for i, p in enumerate(current_patients) if i != selected_patient]
 
+                    print(f"[Main] Selected patient: {chosen['name']}")
+                    
                     # ── Submit choice to backend ──────────────────────────
                     result      = round_manager.submit_choice(chosen['id'])
                     family_line = result.get('family_line')
@@ -154,14 +192,13 @@ def main():
                         t = None
 
                     # ── Run minigame (masks API latency) ──────────────────
+                    print(f"[Main] Starting SurgeryMinigame...")
                     mg              = SurgeryMinigame(screen, fonts, chosen)
                     minigame_passed = mg.run()
+                    print(f"[Main] SurgeryMinigame returned: {minigame_passed}")
 
-                    # Surgery outcome — minigame result reduces survivability if failed
-                    effective_surv = chosen['survivability']
-                    if not minigame_passed:
-                        effective_surv = max(5, effective_surv - 18)
-                    survived = random.random() * 100 < effective_surv
+                    # Surgery outcome — minigame result determines success
+                    survived = minigame_passed
 
                     # ── Record outcome ────────────────────────────────────
                     outcome_tracker.record(
@@ -173,8 +210,11 @@ def main():
                     )
                     round_manager.resolve_surgery(survived, chosen['id'])
 
+                    print(f"[Main] After resolve_surgery. Round {round_num}/{total_rounds}")
+
                     # ── Game over? ────────────────────────────────────────
                     if round_manager.is_game_over():
+                        print(f"[Main] GAME OVER!")
                         ending_detector = EndingDetector(
                             outcome_tracker,
                             round_manager.pressure,
@@ -205,6 +245,7 @@ def main():
                             "Click on a patient card or press 1, 2 or 3 to select, "
                             "then ENTER to confirm."
                         )
+                        print(f"[Main] Round {round_num} loaded with {len(current_patients)} patients")
 
         prompt.update(dt)
 

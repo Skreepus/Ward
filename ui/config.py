@@ -12,6 +12,8 @@ MUTED = (120, 120, 115)
 ACCENT = (148, 148, 72)
 DANGER = (175, 38, 38)
 DIM_OVERLAY = (0, 0, 0, 140)
+ACCENT_COL = (148, 148, 72)  # Olive-yellow accent
+MUTED_COL = (120, 120, 115)   # Muted gray
 
 PANEL_BORDER = (38, 38, 38)
 CARD_BG = (14, 14, 14)
