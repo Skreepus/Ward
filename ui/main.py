@@ -10,7 +10,7 @@ from .patient_card import draw_patient_card
 from .panel import draw_panel
 from .title_screen import TitleScreen
 from .minigame import SurgeryMinigame
-from .loading_screen import LoadingScreen  # Add this import
+from .loading_screen import LoadingScreen
 
 # Import backend
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,18 +31,37 @@ def _load_next_round_async(round_manager, result_container):
         result_container.append(("err", e))
 
 
-class NextRoundLoader:
-    """Simple wrapper to check if loading is complete"""
-    def __init__(self):
-        self.ready = False
-        self.patients = None
-    
-    def set_ready(self, patients):
-        self.ready = True
-        self.patients = patients
-    
-    def is_ready(self):
-        return self.ready
+def _start_game(screen, fonts, round_manager, outcome_tracker):
+    """
+    Initialises a fresh game, shows loading screen while round 1 loads,
+    returns the first batch of patients.
+    """
+    round_manager.start_game()
+
+    # Start loading round 1 immediately in background
+    container = []
+    t = threading.Thread(
+        target=_load_next_round_async,
+        args=(round_manager, container),
+        daemon=True
+    )
+    t.start()
+
+    # Show loading screen — blocks until text done AND patients ready
+    class _SimpleLoader:
+        def is_ready(self): 
+            return bool(container)
+        def get(self): 
+            t.join()
+            return container[0][1] if container and container[0][0] == "ok" else []
+
+    LoadingScreen(screen, fonts).run(_SimpleLoader())
+
+    t.join()
+    if container and container[0][0] == "ok":
+        return container[0][1]
+    else:
+        return round_manager.start_round()
 
 
 def main():
@@ -60,32 +79,12 @@ def main():
         sys.exit()
 
     # ── LOADING SCREEN ────────────────────────────────────────────────────
-    # Create a loader that will be populated by a background thread
-    loader = NextRoundLoader()
-    
-    # Start loading the first round in background while loading screen plays
     round_manager = RoundManager()
     outcome_tracker = OutcomeTracker()
-    
-    def load_first_round():
-        try:
-            round_manager.start_game()
-            patients = round_manager.start_round()
-            loader.set_ready(patients)
-        except Exception as e:
-            print(f"Error loading first round: {e}")
-            loader.set_ready([])
-    
-    # Start loading in background
-    load_thread = threading.Thread(target=load_first_round, daemon=True)
-    load_thread.start()
-    
-    # Show loading screen
-    loading = LoadingScreen(screen, fonts)
-    loading.run(loader)  # This blocks until loading is complete
-    
-    # Get the loaded patients
-    current_patients = loader.patients
+
+    # Loading screen masks the first API call
+    current_patients = _start_game(screen, fonts, round_manager, outcome_tracker)
+
     selected_patient = None
     round_num = 1
     total_rounds = 6
@@ -147,11 +146,12 @@ def main():
                     if choice == 'quit':
                         running = False
                     elif choice == 'play':
+                        # Full reset — show loading screen again
+                        round_manager   = RoundManager()
+                        outcome_tracker = OutcomeTracker()
+                        current_patients = _start_game(
+                            screen, fonts, round_manager, outcome_tracker)
                         selected_patient  = None
-                        round_manager     = RoundManager()
-                        outcome_tracker   = OutcomeTracker()
-                        round_manager.start_game()
-                        current_patients  = round_manager.start_round()
                         round_num         = 1
                         family_line       = None
                         family_line_timer = 0
@@ -197,8 +197,11 @@ def main():
                     minigame_passed = mg.run()
                     print(f"[Main] SurgeryMinigame returned: {minigame_passed}")
 
-                    # Surgery outcome — minigame result determines success
-                    survived = minigame_passed
+                    # Surgery outcome — minigame fail reduces survivability
+                    effective_surv = chosen['survivability']
+                    if not minigame_passed:
+                        effective_surv = max(5, effective_surv - 18)
+                    survived = random.random() * 100 < effective_surv
 
                     # ── Record outcome ────────────────────────────────────
                     outcome_tracker.record(
