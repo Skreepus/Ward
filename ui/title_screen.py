@@ -6,6 +6,7 @@ from .config import W, H, ACCENT, OFF_WHITE, BLACK, NEAR_BLACK, MUTED
 
 # ── Swap background here or pass bg_path= to constructor ─────────────────
 TITLE_BG_PATH = "hospitalpixel1.png"
+TITLE_BG_CURSE = "title_screen_curse.png"  # Curse background for flicker effect
 
 # ── Colours ───────────────────────────────────────────────────────────────
 TEXT_BRIGHT   = (220, 220, 212)   # main readable text
@@ -200,14 +201,39 @@ class TitleScreen:
         
         self.title = FlickerTitle(title_font)
 
-        # ── background ───────────────────────────────────────────────────
+        # ── background with flicker effect ───────────────────────────────────
+        # Load both backgrounds
+        self.background_normal = None
+        self.background_curse = None
+        self.current_background = None
+        
+        # Load normal background
         path = bg_path or TITLE_BG_PATH
-        self.background = None
         try:
             raw = pygame.image.load(path).convert()
-            self.background = pygame.transform.scale(raw, (W, H))
+            self.background_normal = pygame.transform.scale(raw, (W, H))
+            self.current_background = self.background_normal
+            print(f"Loaded normal background: {path}")
         except Exception as e:
             print(f"[TitleScreen] Could not load background '{path}': {e}")
+        
+        # Load curse background
+        try:
+            import os
+            current_dir = os.path.dirname(__file__)
+            curse_path = os.path.join(current_dir, TITLE_BG_CURSE)
+            raw_curse = pygame.image.load(curse_path).convert()
+            self.background_curse = pygame.transform.scale(raw_curse, (W, H))
+            print(f"Loaded curse background: {curse_path}")
+        except Exception as e:
+            print(f"[TitleScreen] Could not load curse background: {e}")
+
+        # ── background flicker timer ─────────────────────────────────────────
+        self.flicker_timer = 0.0
+        self.flicker_interval = 10.0  # 30 seconds between flickers
+        self.is_flickering = False
+        self.flicker_duration = 1  # 0.2 seconds for the flicker effect
+        self.flicker_elapsed = 0.0
 
         # dim overlay — dark enough to read text, light enough to see image
         self._dim = pygame.Surface((W, H), pygame.SRCALPHA)
@@ -247,11 +273,32 @@ class TitleScreen:
         self._fade_alpha = 255
         self._fade_speed = 180
 
-
+    def _update_background_flicker(self, dt):
+        """Update the background flicker effect"""
+        if not self.is_flickering:
+            # Count down to next flicker
+            self.flicker_timer += dt
+            if self.flicker_timer >= self.flicker_interval:
+                self.is_flickering = True
+                self.flicker_elapsed = 0.0
+                self.flicker_timer = 0.0
+                # Switch to curse background
+                if self.background_curse:
+                    self.current_background = self.background_curse
+                print("Background flicker: CURSE")
+        else:
+            # During flicker
+            self.flicker_elapsed += dt
+            if self.flicker_elapsed >= self.flicker_duration:
+                # End flicker, return to normal background
+                self.is_flickering = False
+                self.current_background = self.background_normal
+                print("Background flicker: NORMAL")
         
     def _draw_bg(self):
-        if self.background:
-            self.screen.blit(self.background, (0, 0))
+        """Draw background with flicker effect"""
+        if self.current_background:
+            self.screen.blit(self.current_background, (0, 0))
         else:
             self.screen.fill((14, 14, 14))
         self.screen.blit(self._dim, (0, 0))
@@ -313,6 +360,9 @@ class TitleScreen:
         while True:
             dt        = clock.tick(60) / 1000.0
             mouse_pos = pygame.mouse.get_pos()
+
+            # Update background flicker
+            self._update_background_flicker(dt)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:

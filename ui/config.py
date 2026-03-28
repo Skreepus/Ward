@@ -1,3 +1,16 @@
+import os
+
+
+# Game settings
+NUM_ROUNDS = 6
+ROUND_DURATION = 45  # seconds per round
+TOTAL_RUNTIME = 300  # 5 minutes total game time
+MODEL = "gemini-2.0-flash-exp"  # Gemini model
+MAX_TOKENS = 1024
+
+# Google API Key (you'll need to set this as an environment variable)
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+
 # Constants and configuration
 W, H = 1280, 720
 PANEL_H = int(H * 0.27)
