@@ -1,6 +1,5 @@
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
 
 load_dotenv()
 
@@ -18,15 +17,13 @@ RED = (180, 40, 40)
 # Timing (ms)
 TYPEWRITER_SPEED = 30
 MINIGAME_WINDOW = 800
-ROUND_DURATION = 90          # seconds per round
-TOTAL_RUNTIME = 480          # 8 minutes total
+ROUND_DURATION = 90
+TOTAL_RUNTIME = 480
 
 # API
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=GOOGLE_API_KEY)
 MODEL = "gemini-2.0-flash"
 MAX_TOKENS = 1000
 
 # Rounds
-NUM_ROUNDS = 5
-
+NUM_ROUNDS = 6
