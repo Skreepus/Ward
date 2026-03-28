@@ -22,7 +22,7 @@ TOTAL_RUNTIME = 480
 
 # API
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-2.5-flash"
 MAX_TOKENS = 1000
 
 # Rounds
