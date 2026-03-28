@@ -1,22 +1,23 @@
 import pygame
 import sys
 import os
-from .config import W, H, IMG_H, PANEL_H, FPS, DIM_OVERLAY, MUTED, CARD_W, CARD_H, ACCENT
+import random
+from .config import W, H, IMG_H, PANEL_H, FPS, DIM_OVERLAY, MUTED, CARD_W, CARD_H, ACCENT  # Add ACCENT here
 from .fonts import init_fonts
 from .typewriter import Typewriter
 from .patient_card import draw_patient_card
 from .panel import draw_panel
 from .title_screen import TitleScreen
 
-# Import backend systems
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+# Import backend - add the parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.systems.round_manager import RoundManager
 from src.systems.outcome_manager import OutcomeTracker
 from src.systems.ending_detector import EndingDetector
 
 # ── Swap background images here ──────────────────────────────────────────
 TITLE_BG   = "title_screen.png"
-WARD_BG    = "hospitalpixel1.png"
+WARD_BG    = "hospital4pixel.png"
 
 
 def main():
@@ -46,12 +47,12 @@ def main():
     current_patients = round_manager.start_round()
     selected_patient = None
     round_num = 1
-    total_rounds = 6  # NUM_ROUNDS from config
+    total_rounds = 6
     
     # Show initial prompt
     prompt = Typewriter(
         "Three patients are waiting. One theatre is available. "
-        "Review each case carefully. Press 1, 2 or 3 to select a patient, "
+        "Review each case carefully. Click on a patient card or press 1, 2 or 3 to select, "
         "then ENTER to send them to surgery."
     )
 
@@ -69,15 +70,23 @@ def main():
 
     panel_rect = (0, IMG_H, W, PANEL_H)
 
-    # Card layout
-    total_cards_w = 3 * CARD_W + 2 * 28
+    # Card layout - store card rectangles for mouse click detection
+    card_rects = []
+    total_cards_w = 3 * CARD_W + 2 * 32 
     card_start_x = (W - total_cards_w) // 2
-    card_y = (IMG_H - CARD_H) // 2 + 10
+    card_y = (IMG_H - CARD_H) // 2 + 5
+
+    for i in range(3):
+        card_rects.append(pygame.Rect(
+            card_start_x + i * (CARD_W + 32),  # Match the gap
+            card_y,
+            CARD_W,
+            CARD_H
+        ))
 
     # ── GAME LOOP ─────────────────────────────────────────────────────────
     running = True
     waiting_for_surgery = False
-    surgery_result = None
     family_line = None
     family_line_timer = 0
     
@@ -94,21 +103,34 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
+            # ── MOUSE CLICK DETECTION ─────────────────────────────────────
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = pygame.mouse.get_pos()
+                # Check if clicked on any patient card
+                for i, card_rect in enumerate(card_rects):
+                    if card_rect.collidepoint(mouse_pos) and i < len(current_patients):
+                        selected_patient = i
+                        print(f"Selected patient {i+1}: {current_patients[i]['name']}")
+
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    # back to title screen
                     choice = TitleScreen(screen, fonts, bg_path=TITLE_BG).run()
                     if choice == 'quit':
                         running = False
-                    else:
+                    elif choice == 'play':
+                        # Reset everything
                         selected_patient = None
                         round_manager = RoundManager()
                         outcome_tracker = OutcomeTracker()
                         round_manager.start_game()
                         current_patients = round_manager.start_round()
                         round_num = 1
+                        family_line = None
+                        family_line_timer = 0
                         prompt = Typewriter(
                             "Three patients are waiting. One theatre is available. "
-                            "Review each case carefully. Press 1, 2 or 3 to select a patient, "
+                            "Review each case carefully. Click on a patient card or press 1, 2 or 3 to select, "
                             "then ENTER to send them to surgery."
                         )
                     continue
@@ -135,9 +157,8 @@ def main():
                         
                         # Simulate surgery outcome (based on survivability)
                         survivability = chosen['survivability']
-                        import random
                         survived = random.random() * 100 < survivability
-                        minigame_failed = False  # You can add minigame later
+                        minigame_failed = False
                         
                         outcome_tracker.record(
                             round_number=round_num,
@@ -151,7 +172,7 @@ def main():
                         
                         # Check if game is over
                         if round_manager.is_game_over():
-                            # Show ending screen
+                            # Get ending
                             ending_detector = EndingDetector(
                                 outcome_tracker, 
                                 round_manager.pressure,
@@ -159,7 +180,6 @@ def main():
                             )
                             ending = ending_detector.detect()
                             print(f"Ending: {ending['title']}")
-                            # You'll need to create an ending screen function here
                             running = False
                         else:
                             # Load next round
@@ -170,7 +190,8 @@ def main():
                             # Update prompt for new round
                             prompt = Typewriter(
                                 f"Round {round_num}. New patients have arrived. "
-                                "Choose carefully. One theatre is still available."
+                                "Click on a patient card or press 1, 2 or 3 to select, "
+                                "then ENTER to confirm."
                             )
 
         prompt.update(dt)
@@ -191,21 +212,30 @@ def main():
         if family_line and family_line_timer > 0:
             family_surf = fonts['medium'].render(family_line, True, ACCENT)
             family_rect = family_surf.get_rect(center=(W//2, 60))
-            # Draw background for text
-            pygame.draw.rect(screen, (0, 0, 0, 180), 
-                           (family_rect.x - 10, family_rect.y - 5, 
-                            family_rect.width + 20, family_rect.height + 10))
+            bg_rect = pygame.Rect(family_rect.x - 10, family_rect.y - 5, 
+                                  family_rect.width + 20, family_rect.height + 10)
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 180))
+            screen.blit(bg_surface, bg_rect)
             screen.blit(family_surf, family_rect)
 
-        # Patient cards
+        # Patient cards with mouse hover effect
+        mouse_pos = pygame.mouse.get_pos()
         for i, patient in enumerate(current_patients):
             cx = card_start_x + i * (CARD_W + 28)
+            # Check if mouse is hovering over this card
+            is_hovered = card_rects[i].collidepoint(mouse_pos)
+            # Pass hover state to card drawing (you can add a glow effect)
             draw_patient_card(screen, cx, card_y, patient,
-                            selected=(selected_patient == i), index=i + 1, fonts=fonts)
+                            selected=(selected_patient == i), 
+                            index=i + 1, 
+                            fonts=fonts,
+                            hovered=is_hovered)
 
-        # Bottom panel
+        # Bottom panel - NO BUTTONS
         draw_panel(screen, panel_rect, prompt, selected_patient,
-                  round_num, total_rounds, time_str, fonts=fonts)
+                  round_num, total_rounds, time_str, fonts=fonts,
+                  current_patients=current_patients)
 
         pygame.display.flip()
 
