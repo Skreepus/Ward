@@ -54,8 +54,8 @@ Rules:
 - condition must be short — 2 to 4 words max. Exactly what appears on a hospital card.
   Good: "Bowel perforation", "Ruptured appendix", "Internal haemorrhage"
   Bad: "Severe Sepsis from perforated bowel"
-- quote is one short sentence. Something true about them right now. Not a plea.
-  Good: "I'm sorry for all the fuss.", "I have a tax filing due Friday.", "Can someone water my plants?"
+- quote is one short sentence. Something true about them right now. It should be very dependent on the conditon they are in.
+  Good: "I'm sorry for all the fuss.", "It hurts so bad", "Can someone water my plants?"
 - social_weight: if true, also set social_weight_label to one of:
   "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
   If false, set social_weight_label to null.

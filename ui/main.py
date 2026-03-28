@@ -1,7 +1,7 @@
 import pygame
 import sys
 import os
-from .config import W, H, IMG_H, PANEL_H, FPS, DIM_OVERLAY, MUTED, CARD_W, CARD_H
+from .config import W, H, IMG_H, PANEL_H, FPS, DIM_OVERLAY, MUTED, CARD_W, CARD_H, ACCENT
 from .fonts import init_fonts
 from .typewriter import Typewriter
 from .patient_card import draw_patient_card
