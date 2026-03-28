@@ -128,7 +128,7 @@ def generate_family_moment(patient: dict, status: str) -> str:
 
     prompt = f"""
 Patient: {patient['name']}, {patient['age']}, {patient['condition']}
-Background: {patient['background']}
+Background: {patient.get('background', 'No background available.')}
 Status: {status}
 
 Write one line a family member says right now.
