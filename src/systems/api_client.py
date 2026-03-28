@@ -27,7 +27,7 @@ def _call_json(prompt: str, system: str = None) -> dict | list:
     raw = _call(prompt, system)
     cleaned = raw.replace("```json", "").replace("```", "").strip()
     return json.loads(cleaned)
-
+    
 
 def generate_patients(round_number: int, existing_patients: list) -> list:
     """
@@ -45,7 +45,7 @@ def generate_patients(round_number: int, existing_patients: list) -> list:
 Generate {2 if round_number > 3 else 3} hospital patients for round {round_number} of a triage game.
 
 Rules:
-- Patients are specific, ordinary people — not symbols
+- Patients are specific, ordinary people 
 - One patient should have low survivability (30-50%), one high (75-95%)
 - The quote is something they say right now. Not a plea. Just something true.
 - Examples of good quotes: "I had a dentist appointment tomorrow.", "Can someone check on my dog?", "I don't want to call my sister yet."
@@ -93,7 +93,7 @@ Current patient:
 Rules:
 - Increase severity by 1-2 (max 10)
 - Decrease survivability by 8-15 (min 5)
-- Change the quote subtly — not dramatically. Less energy. Less hope. Not begging.
+- Change the quote subtly. Less energy. Less hope. 
 - If times_passed >= 2, the quote becomes very short or quiet.
 - Do NOT change name, age, id, background, or social_weight
 
