@@ -9,6 +9,7 @@ from .cutscene_failure import FailureCutscene
 from .spine_minigame import SpineMinigame
 from .arm_minigame import ArmMinigame
 from .leg_minigame import LegMinigame
+from .pelvis_minigame import PelvisMinigame
 
 __all__ = [
     'BaseMinigame', 
