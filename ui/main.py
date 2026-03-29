@@ -23,7 +23,7 @@ from src.systems.ending_detector import EndingDetector
 # ============================================
 # DEBUG SETTINGS - Change these for testing
 # ============================================
-SKIP_LOADING_SCREEN = True   # Set to True to skip the initial loading screen
+SKIP_LOADING_SCREEN = False   # Set to True to skip the initial loading screen
 # ============================================
 
 TITLE_BG = "title_screen.png"

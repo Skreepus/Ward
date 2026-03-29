@@ -21,25 +21,55 @@ def _call(prompt: str, system: str = None) -> str:
     return response.text.strip()
 
 
+def _repair_json(text: str) -> str:
+    """
+    Repair common JSON errors produced by LLMs.
+
+    The primary bug seen in production (from the error logs):
+    The API omits the closing } of an object before the comma that
+    separates it from the next object in an array:
+
+        BAD:   "background": "..."\n  ,\n  {
+        GOOD:  "background": "..."\n  },\n  {
+
+    Fix 1 — insert missing } before a comma that directly precedes {
+    Fix 2 — strip trailing commas before } or ] (also common)
+    """
+    # Fix 1: missing closing brace before comma + new object
+    text = re.sub(r'(?<![}\]])(\s*),(\s*\{)', r'}\1,\2', text)
+    # Fix 2: trailing commas before closing brace or bracket
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+    return text
+
+
 def _call_json(prompt: str, system: str = None) -> dict | list:
-    """API call that expects JSON back. Strips markdown fences and parses."""
+    """API call that expects JSON back. Strips markdown fences, repairs, parses."""
     raw = _call(prompt, system)
     cleaned = raw.replace("```json", "").replace("```", "").strip()
-    
-    # Find the first [ or { and last ] or } to extract just the JSON
+
+    # Extract just the JSON array or object from the response
     start = min(
         cleaned.find('[') if cleaned.find('[') != -1 else len(cleaned),
         cleaned.find('{') if cleaned.find('{') != -1 else len(cleaned)
     )
     end = max(cleaned.rfind(']'), cleaned.rfind('}')) + 1
     cleaned = cleaned[start:end]
-    
+
+    # First attempt — parse as-is (no repair overhead for clean responses)
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
-        print(f"[API] JSON parse error: {e}")
+        print(f"[API] JSON parse error (attempting repair): {e}")
+
+    # Second attempt — repair common LLM JSON mistakes and re-parse
+    repaired = _repair_json(cleaned)
+    try:
+        result = json.loads(repaired)
+        print("[API] JSON repaired successfully")
+        return result
+    except json.JSONDecodeError as e2:
+        print(f"[API] JSON repair failed: {e2}")
         print(f"[API] Raw response: {raw[:500]}...")
-        # Return an empty list as fallback
         return []
 
 
