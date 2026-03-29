@@ -4,7 +4,6 @@ Body Targeting Phase — player clicks the correct body area.
 import pygame
 import sys
 from .body_data import BODY_HOTSPOTS
-from ..config import ACCENT_COL, MUTED_COL  # Need to add these to config
 
 # ── Colours ───────────────────────────────────────────────────────────────
 BG_DARK       = (8,   12,  10)
@@ -29,30 +28,29 @@ class BodyTargetingPhase:
     """
 
     WRONG_FLASH_DUR = 0.6
-    INSTRUCTION_DUR = 2.0
 
     def __init__(self, screen, fonts, patient: dict, correct_region: str):
-        self.screen = screen
-        self.fonts = fonts
-        self.patient = patient
+        self.screen         = screen
+        self.fonts          = fonts
+        self.patient        = patient
         self.correct_region = correct_region
-        self.W, self.H = screen.get_size()
+        self.W, self.H      = screen.get_size()
 
         # Body figure anchor
-        self.fig_cx = self.W // 2
+        self.fig_cx  = self.W // 2
         self.fig_top = int(self.H * 0.08)
-        self.fig_h = int(self.H * 0.78)
-        self.fig_w = int(self.fig_h * 0.38)
+        self.fig_h   = int(self.H * 0.78)
+        self.fig_w   = int(self.fig_h * 0.38)
 
         # State
         self.hovered_region = None
-        self.wrong_flash = {}
-        self.result_region = None
+        self.wrong_flash    = {}
+        self.result_region  = None
         self.wrong_attempts = 0
 
         # Fade in
         self._fade_alpha = 255
-        self._fade = pygame.Surface((self.W, self.H))
+        self._fade       = pygame.Surface((self.W, self.H))
         self._fade.fill((0, 0, 0))
 
     def _hotspot_screen_pos(self, hs):
@@ -69,8 +67,11 @@ class BodyTargetingPhase:
         """Blocks until correct region clicked. Returns wrong_attempts count."""
         clock = pygame.time.Clock()
 
+        # Flush any stale events before we start
+        pygame.event.clear()
+
         while self.result_region is None:
-            dt = clock.tick(60) / 1000.0
+            dt        = clock.tick(60) / 1000.0
             mouse_pos = pygame.mouse.get_pos()
 
             # Decay wrong flash timers
@@ -83,7 +84,6 @@ class BodyTargetingPhase:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     self._handle_click(event.pos)
 
@@ -103,6 +103,8 @@ class BodyTargetingPhase:
             self._draw(mouse_pos)
             pygame.display.flip()
 
+        # Brief correct flash before returning
+        self._show_correct()
         return self.wrong_attempts
 
     def _handle_click(self, pos):
@@ -118,9 +120,7 @@ class BodyTargetingPhase:
                 return
 
     def _draw(self, mouse_pos):
-        W, H = self.W, self.H
         self.screen.fill(BG_DARK)
-
         self._draw_table()
         self._draw_body()
         self._draw_hotspots()
@@ -131,7 +131,6 @@ class BodyTargetingPhase:
             self.screen.blit(self._fade, (0, 0))
 
     def _draw_table(self):
-        W, H = self.W, self.H
         table_x = self.fig_cx - self.fig_w // 2 - 30
         table_w = self.fig_w + 60
         table_y = self.fig_top + 20
@@ -142,29 +141,27 @@ class BodyTargetingPhase:
         pygame.draw.rect(self.screen, (35, 48, 40),
                          (table_x, table_y, table_w, table_h), 1, border_radius=8)
 
-        # Drape lines
         for i in range(1, 6):
             dy = table_y + int(i * table_h / 6)
             pygame.draw.line(self.screen, (28, 38, 32),
                              (table_x + 8, dy), (table_x + table_w - 8, dy), 1)
 
     def _draw_body(self):
-        """Draw a simplified body silhouette as overlapping ellipses."""
-        cx = self.fig_cx
+        cx  = self.fig_cx
         top = self.fig_top
-        fh = self.fig_h
-        fw = self.fig_w
+        fh  = self.fig_h
+        fw  = self.fig_w
 
         parts = [
-            (0.50, 0.07, int(fw * 0.38), int(fh * 0.09)),
-            (0.50, 0.22, int(fw * 0.55), int(fh * 0.07)),
-            (0.50, 0.35, int(fw * 0.50), int(fh * 0.14)),
-            (0.50, 0.50, int(fw * 0.44), int(fh * 0.10)),
-            (0.50, 0.62, int(fw * 0.42), int(fh * 0.08)),
-            (0.22, 0.35, int(fw * 0.16), int(fh * 0.18)),
-            (0.78, 0.35, int(fw * 0.16), int(fh * 0.18)),
-            (0.38, 0.78, int(fw * 0.18), int(fh * 0.20)),
-            (0.62, 0.78, int(fw * 0.18), int(fh * 0.20)),
+            (0.50, 0.07, int(fw * 0.38), int(fh * 0.09)),   # head
+            (0.50, 0.22, int(fw * 0.55), int(fh * 0.07)),   # neck/shoulder
+            (0.50, 0.35, int(fw * 0.50), int(fh * 0.14)),   # chest
+            (0.50, 0.50, int(fw * 0.44), int(fh * 0.10)),   # abdomen
+            (0.50, 0.62, int(fw * 0.42), int(fh * 0.08)),   # pelvis
+            (0.22, 0.35, int(fw * 0.16), int(fh * 0.18)),   # left arm
+            (0.78, 0.35, int(fw * 0.16), int(fh * 0.18)),   # right arm
+            (0.38, 0.78, int(fw * 0.18), int(fh * 0.20)),   # left leg
+            (0.62, 0.78, int(fw * 0.18), int(fh * 0.20)),   # right leg
         ]
 
         for rx_frac, ry_frac, w, h in parts:
@@ -183,27 +180,25 @@ class BodyTargetingPhase:
                          (neck_x, neck_y, int(fw * 0.16), neck_h))
 
     def _draw_hotspots(self):
-        """Draw translucent ellipse overlays on each hotspot."""
         for hs in BODY_HOTSPOTS:
             region, label, _, _, rx, ry = hs
             cx, cy, rx, ry = self._hotspot_screen_pos(hs)
 
-            is_hov = (region == self.hovered_region)
-            is_wrong = region in self.wrong_flash
+            is_hov     = (region == self.hovered_region)
+            is_wrong   = region in self.wrong_flash
             is_correct = (region == self.result_region)
 
             if is_correct:
                 col = HOTSPOT_RIGHT
             elif is_wrong:
-                t = self.wrong_flash[region]
-                alpha = int(180 * (t / 0.6))
-                col = (175, 38, 38, alpha)
+                t   = self.wrong_flash[region]
+                col = (175, 38, 38, int(180 * (t / self.WRONG_FLASH_DUR)))
             elif is_hov:
                 col = HOTSPOT_HOV
             else:
                 col = HOTSPOT_IDLE
 
-            ew, eh = rx * 2 + 4, ry * 2 + 4
+            ew, eh  = rx * 2 + 4, ry * 2 + 4
             hs_surf = pygame.Surface((ew, eh), pygame.SRCALPHA)
             pygame.draw.ellipse(hs_surf, col, (0, 0, ew, eh))
             self.screen.blit(hs_surf, (cx - rx - 2, cy - ry - 2))
@@ -213,10 +208,9 @@ class BodyTargetingPhase:
                 self.screen.blit(lbl, (cx - lbl.get_width() // 2, cy + ry + 6))
 
     def _draw_ui(self):
-        W, H = self.W, self.H
+        W, H    = self.W, self.H
         patient = self.patient
 
-        # Header
         name_s = self.fonts['large'].render(
             f"{patient['name']}, {patient['age']}", True, TEXT_COL)
         self.screen.blit(name_s, (36, 20))
@@ -224,12 +218,31 @@ class BodyTargetingPhase:
         cond_s = self.fonts['small'].render(patient['condition'], True, MUTED_COL)
         self.screen.blit(cond_s, (36, 48))
 
-        # Instruction
         if self.wrong_attempts == 0:
-            inst = "Click the correct area to begin surgery."
+            inst     = "Click the correct area to begin surgery."
+            inst_col = MUTED_COL
         else:
-            inst = f"Incorrect.  Attempts: {self.wrong_attempts}  — the patients condition has worsened."
+            inst     = f"Incorrect.  {self.wrong_attempts} wrong  —  condition has worsened."
+            inst_col = (175, 80, 60)
 
-        inst_col = MUTED_COL if self.wrong_attempts == 0 else (175, 80, 60)
         inst_s = self.fonts['medium'].render(inst, True, inst_col)
         self.screen.blit(inst_s, ((W - inst_s.get_width()) // 2, H - 36))
+
+    def _show_correct(self):
+        """Brief green flash on correct region before exiting."""
+        end_time = pygame.time.get_ticks() + 600
+        clock    = pygame.time.Clock()
+
+        while pygame.time.get_ticks() < end_time:
+            clock.tick(60)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+            self.screen.fill(BG_DARK)
+            self._draw_table()
+            self._draw_body()
+            self._draw_hotspots()
+            self._draw_ui()
+            pygame.display.flip()

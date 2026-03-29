@@ -10,8 +10,9 @@ from .patient_card import draw_patient_card
 from .panel import draw_panel
 from .title_screen import TitleScreen
 from .minigame import SurgeryMinigame
-from .loading_screen import LoadingScreen
 from .family_overlay import FamilyOverlay
+from .surgery.body_targeting import BodyTargetingPhase
+from .surgery.body_data import condition_to_region
 
 # Import backend
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,19 +42,38 @@ def _start_game(screen, fonts, round_manager, outcome_tracker):
     )
     t.start()
 
-    class _SimpleLoader:
-        def is_ready(self):
-            return bool(container)
-        def get(self):
-            t.join()
-            return container[0][1] if container and container[0][0] == "ok" else []
-
-    LoadingScreen(screen, fonts).run(_SimpleLoader())
+    # Loading screen disabled — just wait for thread
     t.join()
     if container and container[0][0] == "ok":
         return container[0][1]
     else:
         return round_manager.start_round()
+
+
+def _run_surgery(screen, fonts, chosen):
+    """
+    Runs body targeting then ECG minigame.
+    Returns (wrong_clicks, minigame_passed).
+    Called once per patient — never re-entrant.
+    """
+    pygame.event.clear()
+
+    region = chosen.get('region') or condition_to_region(chosen['condition'])
+    print(f"[Surgery] Region: {region} (API: {chosen.get('region')!r}, condition: {chosen['condition']!r})")
+
+    targeting    = BodyTargetingPhase(screen, fonts, chosen, region)
+    wrong_clicks = targeting.run()
+    print(f"[Surgery] Body targeting done. Wrong clicks: {wrong_clicks}")
+
+    pygame.event.clear()
+
+    mg              = SurgeryMinigame(screen, fonts, chosen)
+    minigame_passed = mg.run()
+    print(f"[Surgery] Minigame returned: {minigame_passed}")
+
+    pygame.event.clear()
+
+    return wrong_clicks, minigame_passed
 
 
 def main():
@@ -78,7 +98,8 @@ def main():
     selected_patient = None
     round_num        = 1
     total_rounds     = 6
-    active_overlay   = None   # FamilyOverlay instance or None
+    active_overlay   = None
+    in_surgery       = False
 
     prompt = Typewriter(
         "Three patients are waiting. One theatre is available. "
@@ -114,7 +135,6 @@ def main():
     while running:
         dt = clock.tick(FPS) / 1000.0
 
-        # Update family overlay
         if active_overlay:
             active_overlay.update(dt)
             if active_overlay.done:
@@ -125,18 +145,18 @@ def main():
                 running = False
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_pos = pygame.mouse.get_pos()
-                for i, card_rect in enumerate(card_rects):
-                    if card_rect.collidepoint(mouse_pos) and i < len(current_patients):
-                        selected_patient = i
+                if not in_surgery:
+                    mouse_pos = pygame.mouse.get_pos()
+                    for i, card_rect in enumerate(card_rects):
+                        if card_rect.collidepoint(mouse_pos) and i < len(current_patients):
+                            selected_patient = i
 
             if event.type == pygame.KEYDOWN:
 
-                # SPACE dismisses family overlay if active
                 if event.key == pygame.K_SPACE and active_overlay:
                     active_overlay.dismiss()
 
-                if event.key == pygame.K_ESCAPE:
+                if event.key == pygame.K_ESCAPE and not in_surgery:
                     choice = TitleScreen(screen, fonts, bg_path=TITLE_BG).run()
                     if choice == 'quit':
                         running = False
@@ -148,6 +168,7 @@ def main():
                         selected_patient  = None
                         round_num         = 1
                         active_overlay    = None
+                        in_surgery        = False
                         prompt = Typewriter(
                             "Three patients are waiting. One theatre is available. "
                             "Review each case carefully. Click on a patient card or press 1, 2 or 3 to select, "
@@ -155,21 +176,22 @@ def main():
                         )
                     continue
 
-                if event.key == pygame.K_1 and len(current_patients) >= 1: selected_patient = 0
-                if event.key == pygame.K_2 and len(current_patients) >= 2: selected_patient = 1
-                if event.key == pygame.K_3 and len(current_patients) >= 3: selected_patient = 2
-                if event.key == pygame.K_SPACE and not active_overlay: prompt.skip()
+                if not in_surgery:
+                    if event.key == pygame.K_1 and len(current_patients) >= 1: selected_patient = 0
+                    if event.key == pygame.K_2 and len(current_patients) >= 2: selected_patient = 1
+                    if event.key == pygame.K_3 and len(current_patients) >= 3: selected_patient = 2
+                    if event.key == pygame.K_SPACE and not active_overlay: prompt.skip()
 
-                if event.key == pygame.K_RETURN and selected_patient is not None:
+                if event.key == pygame.K_RETURN and selected_patient is not None and not in_surgery:
+                    in_surgery = True
+
                     chosen = current_patients[selected_patient]
                     passed = [p for i, p in enumerate(current_patients) if i != selected_patient]
 
                     print(f"[Main] Selected patient: {chosen['name']}")
 
-                    # Submit choice to backend
                     result = round_manager.submit_choice(chosen['id'])
 
-                    # Start loading next round in background
                     next_round_container = []
                     if not round_manager.is_game_over():
                         t = threading.Thread(
@@ -181,19 +203,15 @@ def main():
                     else:
                         t = None
 
-                    # Run minigame
-                    print(f"[Main] Starting SurgeryMinigame...")
-                    mg              = SurgeryMinigame(screen, fonts, chosen)
-                    minigame_passed = mg.run()
-                    print(f"[Main] SurgeryMinigame returned: {minigame_passed}")
+                    wrong_clicks, minigame_passed = _run_surgery(screen, fonts, chosen)
 
-                    # Surgery outcome
                     effective_surv = chosen['survivability']
+                    effective_surv = max(5, effective_surv - (wrong_clicks * 8))
                     if not minigame_passed:
                         effective_surv = max(5, effective_surv - 18)
+
                     survived = random.random() * 100 < effective_surv
 
-                    # Record outcome
                     outcome_tracker.record(
                         round_number    = round_num,
                         chosen_patient  = chosen,
@@ -203,14 +221,12 @@ def main():
                     )
                     round_manager.resolve_surgery(survived, chosen['id'])
 
-                    # Spawn family overlay after minigame if a line was generated
                     family_line = result.get('family_line')
                     if family_line:
                         active_overlay = FamilyOverlay(screen, fonts, chosen, family_line)
 
                     print(f"[Main] After resolve_surgery. Round {round_num}/{total_rounds}")
 
-                    # Game over?
                     if round_manager.is_game_over():
                         print(f"[Main] GAME OVER!")
                         ending_detector = EndingDetector(
@@ -220,6 +236,7 @@ def main():
                         )
                         ending = ending_detector.detect()
                         print(f"Ending: {ending['title']}")
+                        in_surgery = False
                         running = False
                     else:
                         if t is not None:
@@ -237,6 +254,8 @@ def main():
 
                         round_num       += 1
                         selected_patient = None
+                        in_surgery       = False
+
                         prompt = Typewriter(
                             f"Round {round_num}. New patients have arrived. "
                             "Click on a patient card or press 1, 2 or 3 to select, "
@@ -270,7 +289,6 @@ def main():
                    round_num, total_rounds, time_str, fonts=fonts,
                    current_patients=current_patients)
 
-        # Family overlay drawn last — sits on top of everything
         if active_overlay:
             active_overlay.draw()
 

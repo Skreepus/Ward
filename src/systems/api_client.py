@@ -49,13 +49,15 @@ def generate_patients(round_number: int, existing_patients: list) -> list:
 Generate {2 if round_number > 3 else 3} hospital patients for round {round_number} of a triage game.
 
 Rules:
-- Patients are specific, ordinary people — not symbols
+- Patients are specific, ordinary people 
+- Names for the patients must be unique. No repeats.
 - One patient should have low survivability (30-50%), one high (75-95%)
-- condition must be short — 2 to 4 words max. Exactly what appears on a hospital card.
+- condition must be short — 2 to 3 words max. Exactly what appears on a hospital card.
   Good: "Bowel perforation", "Ruptured appendix", "Internal haemorrhage"
   Bad: "Severe Sepsis from perforated bowel"
 - quote is one short sentence. Something true about them right now. It should be very dependent on the conditon they are in.
   Good: "I'm sorry for all the fuss.", "It hurts so bad", "Can someone water my plants?"
+- Do not generate too many individuals with social weight.
 - social_weight: if true, also set social_weight_label to one of:
   "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
   If false, set social_weight_label to null.
@@ -107,7 +109,7 @@ Current patient:
 Rules:
 - Increase severity by 1-2 (max 10)
 - Decrease survivability by 8-15 (min 5)
-- Change the quote subtly — not dramatically. Less energy. Less hope. Not begging.
+- Change the quote subtly, not dramatically. Less energy. Less hope.
 - If times_passed >= 2, the quote becomes very short or quiet.
 - condition stays the same 2-4 word format — do NOT expand it.
 - Do NOT change name, age, id, background, social_weight, or social_weight_label.
@@ -115,7 +117,7 @@ Rules:
   Match it to the condition. Examples:
   "Ruptured appendix" → "abdomen"
   "Aortic dissection" → "chest"
-  "Compound tibia fracture" → "leg"
+  "Tibia fracture" → "leg"
   "Bowel perforation" → "abdomen"
   "Cranial bleed" → "head"
 

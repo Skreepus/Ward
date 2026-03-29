@@ -21,15 +21,14 @@ BRIEFING = [
     ("You are already here.",                                              1.8),
     ("",                                                                   0.6),
     ("The previous doctor went home four hours ago.",                      2.0),
-    ("You do not know why you were called in.",                            1.8),
+    ("You were called in",                            1.8),
     ("You did not ask.",                                                   1.4),
     ("",                                                                   0.6),
     ("One theatre. One surgeon on call.",                                  1.8),
     ("One window.",                                                        2.2),
     ("",                                                                   0.6),
-    ("The patients do not know about each other.",                         2.0),
     ("",                                                                   0.5),
-    ("You do.",                                                            2.8),
+    ("Time to clock in",                                                            2.8),
 ]
 
 
