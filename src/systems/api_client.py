@@ -50,7 +50,7 @@ def generate_patients(round_number: int, existing_patients: list) -> list:
     """
     system = (
         "You are generating patients for a hospital triage game. "
-        "Return ONLY valid JSON, no markdown, no explanation, no trailing commas."
+        "Return ONLY valid JSON, no markdown, no explanation."
     )
 
     existing_names = [p.get("name") for p in existing_patients]
@@ -58,44 +58,49 @@ def generate_patients(round_number: int, existing_patients: list) -> list:
     prompt = f"""
 Generate {2 if round_number > 3 else 3} hospital patients for round {round_number} of a triage game.
 
-IMPORTANT: Return ONLY valid JSON. No markdown. No trailing commas.
-
 Rules:
 - Patients are specific, ordinary people 
-- Names must be unique. No repeats.
-- One patient should have low survivability (30-50%), one high (75-95%)
-- condition: 2-4 words exactly
-- quote: one short sentence dependent on their condition
-- background: one sentence about who they are outside the hospital
-- region: one of "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis"
+- It should be more common for patients to be children/teenagers, middle aged or elderly.
+- Names for the patients must be unique. No repeats of names.
+- The names should be multicultural, not only caucasian surnames.
+- One patient should have medium survivability (55-70%), one high (90-99%)
+- condition must short, 2 to 3 words and MUST relate to one and only to one of the given body parts: "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis".
+  condition is exactly what appears on a hospital card. 
+  examples in the form: "condition" -> "region"
+  Good: "Ruptured appendix" -> "abdomen", "Aortic dissection" → "chest", "Herniated disc" -> spine, "Achilles Tendinopathy" -> leg, "Cerebral aneurysm" -> "head", "Osteitis Pubis" -> "pelvis", "Radial tunnel syndrome" -> "arm".
+  Bad: "Severe Sepsis from perforated bowel"
+- quote is one short sentence. Something true about them right now. It should be very dependent on the conditon they are in.
+  Good: "I'm sorry for all the fuss.", "It hurts so bad", "Can someone water my plants?", "I have a daughter... where is she?"
+- Do not generate too many individuals with social weight.
+- social_weight: if true, also set social_weight_label to one of:
+  "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
+  If false, set social_weight_label to null.
+- 
+- background is one sentence — who they are outside this hospital.
 
-Avoid these names: {existing_names}
+Avoid these names (already in game): {existing_names}
 
-Return a JSON array with this EXACT structure (no trailing commas):
+Return a JSON array with this exact structure:
 [
   {{
-    "id": "patient_001",
+    "id": "unique_string",
     "name": "Full Name",
-    "age": 45,
-    "condition": "Short condition",
-    "region": "chest",
-    "severity": 5,
-    "survivability": 70,
-    "quote": "One sentence quote.",
+    "age": 0,
+    "condition": "2 to 3 word condition",
+    "region": "pelvis",
+    "severity": 0,
+    "survivability": 0,
+    "quote": "One sentence.",
     "times_passed": 0,
     "social_weight": false,
-    "social_weight_label": null,
-    "background": "One sentence background."
+    "social_weight_label": null
+    
   }}
 ]
 
-severity: 1-10. survivability: 0-100.
+severity is 1-10. survivability is 0-100 (percent with treatment).
 """
-    result = _call_json(prompt, system)
-    if not result:
-        # Return fallback patients if API fails
-        return _get_fallback_patients(round_number)
-    return result
+    return _call_json(prompt, system)
 
 
 def _get_fallback_patients(round_number: int) -> list:
@@ -231,7 +236,7 @@ Requirements:
 - Include physical details about the family member
 - Include little dialogue
 - End with a small, memorable detail
-- Keep it under 100 words
+- Keep it under 80 words
 - MUST use PRESENT TENSE and SECOND PERSON throughout
 - Adjectives should be used, but do not overdo them
 

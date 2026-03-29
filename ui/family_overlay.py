@@ -31,16 +31,20 @@ class TypewriterText:
     def is_complete(self):
         return self.complete
     
-    def draw(self, surf, x, y):
+    def draw(self, surf, x, y, center_x=False, center_y=False):
         text = self.get_text()
         rendered = self.font.render(text, True, self.color)
+        if center_x:
+            x = x - rendered.get_width() // 2
+        if center_y:
+            y = y - rendered.get_height() // 2
         surf.blit(rendered, (x, y))
 
 
 class FamilyOverlay:
     """
     Full‑screen modal that shows a family member's message.
-    Solid black background with typewriter animation.
+    Centered text with medium-sized box.
     """
 
     def __init__(self, screen, fonts, patient: dict, line: str):
@@ -59,22 +63,19 @@ class FamilyOverlay:
         self.typewriters = []
         self._setup_typewriters()
         
+        # Calculate text dimensions to size the box properly
+        self._calculate_box_size()
+        
         # Animation state
         self.current_line_index = 0
         self.line_delay_timer = 0
-        self.line_delay = 0.25  # seconds between lines
+        self.line_delay = 0.25
         self.all_lines_complete = False
         
         self.alpha = 0
         self.fade_speed = 400
         self.state = "fade_in"
         self._dismissed = False
-        
-        # Background box dimensions - full screen, solid black
-        self.bg_width = self.W - 100
-        self.bg_height = self.H - 100
-        self.bg_x = 50
-        self.bg_y = 50
         
         print(f"[FamilyOverlay] Created for {patient.get('name', 'Unknown')}")
 
@@ -84,16 +85,42 @@ class FamilyOverlay:
         lines = []
         for para in paragraphs:
             if para.strip():
-                wrapped = textwrap.wrap(para, width=70)
+                # Wrap to fit within a medium box (55 chars per line)
+                wrapped = textwrap.wrap(para, width=55)
                 lines.extend(wrapped)
             else:
                 lines.append('')
         return lines
 
+    def _calculate_box_size(self):
+        """Calculate the optimal box size based on text content."""
+        medium_font = self._get_font('medium', 18)
+        
+        max_width = 0
+        total_height = 0
+        line_height = 28
+        
+        for line in self.lines:
+            if line:
+                width = medium_font.size(line)[0]
+                max_width = max(max_width, width)
+                total_height += line_height
+            else:
+                total_height += 15  # Empty line spacing
+        
+        # Add padding
+        padding_x = 60
+        padding_y = 80
+        
+        self.bg_width = min(max_width + padding_x, self.W - 100)
+        self.bg_height = total_height + padding_y
+        self.bg_x = (self.W - self.bg_width) // 2
+        self.bg_y = (self.H - self.bg_height) // 2
+
     def _setup_typewriters(self):
         """Create typewriter animations for each line."""
-        medium_font = self._get_font('medium', 20)
-        TEXT_COL = (220, 218, 190)  # Slightly brighter for dark background
+        medium_font = self._get_font('medium', 18)
+        TEXT_COL = (220, 218, 190)
         
         for line in self.lines:
             if line == '':
@@ -164,22 +191,22 @@ class FamilyOverlay:
         if self.done or self.alpha <= 0:
             return
 
-        # SOLID BLACK BACKGROUND (no transparency)
+        # Solid black background
         black_bg = pygame.Surface((self.W, self.H))
         black_bg.fill((0, 0, 0))
         black_bg.set_alpha(self.alpha)
         self.screen.blit(black_bg, (0, 0))
 
-        # Text box with subtle border
+        # Medium-sized text box with subtle border
         box = pygame.Surface((self.bg_width, self.bg_height), pygame.SRCALPHA)
-        box.fill((5, 5, 8, int(self.alpha * 0.95)))  # Very dark gray box
+        box.fill((10, 12, 15, int(self.alpha * 0.95)))  # Dark gray, not completely black
         pygame.draw.rect(box, (148, 148, 72, self.alpha), 
                         (0, 0, self.bg_width, self.bg_height), 2)
         
         self.screen.blit(box, (self.bg_x, self.bg_y))
 
-        # Draw typewriter lines
-        y_offset = self.bg_y + 60
+        # Draw typewriter lines - CENTERED
+        y_offset = self.bg_y + 50
         line_height = 28
         
         for i, tw in enumerate(self.typewriters):
@@ -190,11 +217,12 @@ class FamilyOverlay:
                 y_offset += 15
                 continue
                 
-            x = self.bg_x + 40
-            tw.draw(self.screen, x, y_offset)
+            # Center the text horizontally
+            x = self.bg_x + (self.bg_width // 2)
+            tw.draw(self.screen, x, y_offset, center_x=True)
             y_offset += line_height
 
-        # Draw continue prompt
+        # Draw continue prompt at bottom center
         if self.all_lines_complete and self.state == "hold":
             small_font = self._get_font('small', 14)
             prompt_surf = small_font.render("Press SPACE or click to continue", 
