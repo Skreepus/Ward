@@ -7,34 +7,38 @@ Shared data between BodyTargetingPhase and main orchestrator.
 # Keys are lowercase substrings — first match wins.
 CONDITION_REGION_MAP = {
     # CHEST / CARDIAC
-    "heart":        "chest",
-    "cardiac":      "chest",
     "coronary":     "chest",
     "myocard":      "chest",
-    "haemorrhage":  "chest",
     "aorta":        "chest",
     "pericardial":  "chest",
+    "heart":        "chest",
+    "cardiac":      "chest",
+    "haemorrhage":  "chest",      # internal haemorrhage
+    
     # LUNG / RESPIRATORY
     "lung":         "chest",
-    "pulmonar":     "chest",
-    "pneumo":       "chest",
     "asthma":       "chest",
     "bronch":       "chest",
-    "pleural":      "chest",
+    "pneumo":       "chest",      # pneumonia
+    "pleural":      "chest",      # pleural effusion
+    "respiratory":  "chest",
+    
     # ABDOMEN
     "bowel":        "abdomen",
     "appendix":     "abdomen",
     "liver":        "abdomen",
+    "gallbladder":  "abdomen",
     "stomach":      "abdomen",
     "abdom":        "abdomen",
     "spleen":       "abdomen",
     "hernia":       "abdomen",
     "perforat":     "abdomen",
-    "gallbladder":  "abdomen",
     "pancreati":    "abdomen",
+    
     # HEAD / BRAIN
-    "brain":        "head",
     "cranial":      "head",
+    "epilepsy":     "head",
+    "brain":        "head",
     "skull":        "head",
     "cerebr":       "head",
     "neural":       "head",
@@ -43,12 +47,41 @@ CONDITION_REGION_MAP = {
     "jaw":          "head",
     "eye":          "head",
     "ear":          "head",
+    "facial":       "head",
+    "tooth":        "head",
+    "mouth":        "head",
+    
+    # ARM / SHOULDER
+    "shoulder":     "arm",
+    "arm":          "arm",
+    "elbow":        "arm",
+    "wrist":        "arm",
+    "hand":         "arm",
+    "radius":       "arm",
+    "ulna":         "arm",
+    "humerus":      "arm",
+    "clavicle":     "arm",
+    
+    # LEG
+    "knee":         "leg",
+    "ankle":        "leg",
+    "femur":        "leg",
+    "tibia":        "leg",
+    "leg":          "leg",
+    "hip fracture": "leg",
+    "fibula":       "leg",
+    "patella":      "leg",
+    "foot":         "leg",
+    
     # SPINE / BACK
     "spine":        "spine",
-    "spinal":       "spine",
-    "vertebr":      "spine",
-    "disc":         "spine",
     "back":         "spine",
+    "vertebr":      "spine",
+    "spinal":       "spine",
+    "disc":         "spine",
+    "lumbar":       "spine",
+    "cervical":     "spine",
+    
     # PELVIS / LOWER
     "pelvi":        "pelvis",
     "hip":          "pelvis",
@@ -57,19 +90,8 @@ CONDITION_REGION_MAP = {
     "renal":        "pelvis",
     "uterus":       "pelvis",
     "ovari":        "pelvis",
-    # ARM / SHOULDER
-    "shoulder":     "arm",
-    "arm":          "arm",
-    "elbow":        "arm",
-    "wrist":        "arm",
-    "hand":         "arm",
-    # LEG
-    "leg":          "leg",
-    "knee":         "leg",
-    "ankle":        "leg",
-    "femur":        "leg",
-    "tibia":        "leg",
-    "hip fracture": "leg",
+    "prostate":     "pelvis",
+    "pelvic":       "pelvis",
 }
 
 DEFAULT_REGION = "chest"

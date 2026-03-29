@@ -228,7 +228,7 @@ class BodyTargetingPhase:
         if self.wrong_attempts == 0:
             inst = "Click the correct area to begin surgery."
         else:
-            inst = f"Incorrect.  Attempts: {self.wrong_attempts}  — try again."
+            inst = f"Incorrect.  Attempts: {self.wrong_attempts}  — the patients condition has worsened."
 
         inst_col = MUTED_COL if self.wrong_attempts == 0 else (175, 80, 60)
         inst_s = self.fonts['medium'].render(inst, True, inst_col)
