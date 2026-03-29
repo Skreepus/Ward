@@ -59,6 +59,7 @@ Rules:
 - social_weight: if true, also set social_weight_label to one of:
   "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
   If false, set social_weight_label to null.
+- 
 - background is one sentence — who they are outside this hospital.
 
 Avoid these names (already in game): {existing_names}
@@ -70,12 +71,14 @@ Return a JSON array with this exact structure:
     "name": "Full Name",
     "age": 0,
     "condition": "2-4 word condition",
+    "region": "chest",
     "severity": 0,
     "survivability": 0,
     "quote": "One sentence.",
     "times_passed": 0,
     "social_weight": false,
     "social_weight_label": null
+    
   }}
 ]
 
@@ -96,6 +99,7 @@ def deteriorate_patient(patient: dict) -> dict:
 
     prompt = f"""
 This patient was passed over last round and has been waiting. Worsen their condition slightly.
+- Do NOT change region.
 
 Current patient:
 {json.dumps(patient, indent=2)}
@@ -107,6 +111,13 @@ Rules:
 - If times_passed >= 2, the quote becomes very short or quiet.
 - condition stays the same 2-4 word format — do NOT expand it.
 - Do NOT change name, age, id, background, social_weight, or social_weight_label.
+- region must be one of: "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis"
+  Match it to the condition. Examples:
+  "Ruptured appendix" → "abdomen"
+  "Aortic dissection" → "chest"
+  "Compound tibia fracture" → "leg"
+  "Bowel perforation" → "abdomen"
+  "Cranial bleed" → "head"
 
 Return the full updated patient JSON object.
 """
