@@ -1,56 +1,90 @@
 import pygame
-import os
 import sys
+import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-
-
-# ── Colours ───────────────────────────────────────────────────────────────
-BG_COL       = (0,   0,   0,  210)
-TEXT_COL     = (190, 188, 150)
-DIM_COL      = (80,  78,  62)
-NAME_COL     = (100, 98,  78)
-ACCENT_LINE  = (70,  68,  50)
-
-
-STRIP_H     = 140
-SLIDE_SPEED = 180    # slower — more deliberate
+# Optional: add project path if needed
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class FamilyOverlay:
     """
-    A family member appears at the bottom of the screen.
-    They say one thing. The game keeps running behind it.
-
-    Non-blocking — call update() and draw() each frame.
-    Check .done to know when finished.
+    Full‑screen modal that shows a family member's message.
+    Blocks all game input until dismissed (click or SPACE).
+    Matches the dark, pixel‑art aesthetic of WARD.
     """
 
-    DISPLAY_TIME = 7.0
-    FADE_IN_TIME = 0.6
-    FADE_OUT_TIME = 1.2
-
     def __init__(self, screen, fonts, patient: dict, line: str):
-        self.screen  = screen
-        self.fonts   = fonts
+        """
+        screen: pygame display surface
+        fonts: dict with keys 'small', 'medium', 'large' (fallbacks provided)
+        patient: dict containing 'name', 'age', 'condition', etc.
+        line: the dialogue line from the family member
+        """
+        self.screen = screen
+        self.fonts = fonts
         self.patient = patient
-        self.line    = line
+        self.line = line
+        self.done = False
 
-        W, H         = screen.get_size()
-        self.W       = W
-        self.H       = H
+        self.W, self.H = screen.get_size()
 
-        self._strip_y    = float(H)
-        self._target_y   = float(H - STRIP_H)
-        self._hold_timer = 0.0
-        self._fading     = False
-        self._alpha      = 0.0        # fades in AND out
-        self.done        = False
+        # Pre‑render all text surfaces (so we don't re‑render every frame)
+        self._render_texts()
 
-        self._relation   = self._infer_relation(patient)
-        self._arrived    = False      # True once strip reaches target
+        # Animation state
+        self.alpha = 0               # current opacity (0‑255)
+        self.fade_speed = 500        # alpha per second
+        self.state = "fade_in"       # fade_in → hold → fade_out
+
+        # Optional auto‑dismiss (disabled by default – requires click/SPACE)
+        self.auto_dismiss = False
+        self.hold_time = 0.0
+
+        print(f"[FamilyOverlay] Created for {patient.get('name', 'Unknown')}")
+
+    def _get_font(self, key: str, default_size: int):
+        """Return a font from self.fonts or a sensible fallback."""
+        font = self.fonts.get(key)
+        if font is None:
+            # Fallback to system monospace
+            return pygame.font.SysFont('monospace', default_size)
+        return font
+
+    def _render_texts(self):
+        """Render all static text elements."""
+        # Use fallback fonts if the provided ones are missing
+        small_font = self._get_font('small', 16)
+        medium_font = self._get_font('medium', 24)
+        large_font = self._get_font('large', 32)   # not used here, but available
+
+        # Colours (match the game's muted palette)
+        TEXT_COL = (190, 188, 150)      # warm off‑white
+        ACCENT_COL = (70, 68, 50)       # dark muted gold
+        NAME_COL = (100, 98, 78)        # dimmer gold
+        PROMPT_COL = (120, 118, 90)     # very dim for continue text
+
+        # Relation line (e.g., "A family member came in...")
+        relation = self._infer_relation(self.patient)
+        self.relation_surf = small_font.render(relation, True, ACCENT_COL)
+
+        # The quote (with quotes)
+        quote_text = f'"{self.line}"'
+        self.quote_surf = medium_font.render(quote_text, True, TEXT_COL)
+
+        # Patient name and condition
+        name = self.patient.get('name', 'Unknown')
+        cond = self.patient.get('condition', '')
+        subline = f"{name}  –  {cond}"
+        self.sub_surf = small_font.render(subline, True, NAME_COL)
+
+        # Continue prompt (only visible in "hold" state)
+        self.continue_surf = small_font.render(
+            "Click anywhere or press SPACE to continue",
+            True, PROMPT_COL
+        )
 
     def _infer_relation(self, patient: dict) -> str:
+        """Return a short description of the family member based on patient's age."""
         age = patient.get("age", 40)
         if age < 18:
             return "A parent has been waiting outside."
@@ -64,74 +98,74 @@ class FamilyOverlay:
             return "Someone has been sitting in the waiting area since this morning."
 
     def update(self, dt: float):
+        """Call this every frame with delta time in seconds."""
         if self.done:
             return
 
-        # Slide in
-        if self._strip_y > self._target_y:
-            self._strip_y = max(self._target_y, self._strip_y - SLIDE_SPEED * dt)
-
-        # Fade in once arrived
-        if self._strip_y <= self._target_y + 1:
-            self._arrived = True
-
-        if self._arrived and not self._fading:
-            self._alpha = min(255, self._alpha + (255 / self.FADE_IN_TIME) * dt)
-
-        # Hold
-        if self._alpha >= 255 and not self._fading:
-            self._hold_timer += dt
-            if self._hold_timer >= self.DISPLAY_TIME:
-                self._fading = True
-
-        # Fade out
-        if self._fading:
-            self._alpha = max(0, self._alpha - (255 / self.FADE_OUT_TIME) * dt)
-            if self._alpha <= 0:
+        if self.state == "fade_in":
+            self.alpha += self.fade_speed * dt
+            if self.alpha >= 255:
+                self.alpha = 255
+                self.state = "hold"
+        elif self.state == "hold":
+            if self.auto_dismiss:
+                self.hold_time += dt
+                if self.hold_time >= 5.0:   # auto‑dismiss after 5 seconds
+                    self.state = "fade_out"
+        elif self.state == "fade_out":
+            self.alpha -= self.fade_speed * dt
+            if self.alpha <= 0:
+                self.alpha = 0
                 self.done = True
 
-    def dismiss(self):
-        self._fading = True
+    def handle_event(self, event):
+        """
+        Call this from your main event loop while the overlay is active.
+        It will dismiss the overlay on mouse click or SPACE.
+        """
+        if self.done:
+            return
+        if self.state == "hold":
+            if event.type == pygame.MOUSEBUTTONDOWN or \
+               (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE):
+                self.state = "fade_out"
 
     def draw(self):
+        """Draw the full‑screen overlay (should be called last, after game drawing)."""
         if self.done:
             return
 
-        W     = self.W
-        y     = int(self._strip_y)
-        alpha = int(self._alpha)
+        # Create a semi‑transparent dark surface
+        overlay = pygame.Surface((self.W, self.H), pygame.SRCALPHA)
+        # Black with opacity based on current alpha (0‑255)
+        overlay.fill((0, 0, 0, int(self.alpha * 0.85)))
 
-        # Build strip surface
-        surf = pygame.Surface((W, STRIP_H), pygame.SRCALPHA)
+        # Calculate vertical centering for all text blocks
+        total_height = (self.relation_surf.get_height() +
+                        self.quote_surf.get_height() +
+                        self.sub_surf.get_height() +
+                        self.continue_surf.get_height() + 60)
+        y = (self.H - total_height) // 2
 
-        # Background — dark, slightly warm
-        pygame.draw.rect(surf, (10, 9, 7, 220), (0, 0, W, STRIP_H))
+        # 1. Relation line (small, above quote)
+        x = (self.W - self.relation_surf.get_width()) // 2
+        overlay.blit(self.relation_surf, (x, y))
+        y += self.relation_surf.get_height() + 20
 
-        # Top border
-        pygame.draw.line(surf, (55, 53, 40), (0, 0), (W, 0), 1)
+        # 2. Quote (larger)
+        x = (self.W - self.quote_surf.get_width()) // 2
+        overlay.blit(self.quote_surf, (x, y))
+        y += self.quote_surf.get_height() + 30
 
-        # Left accent bar
-        pygame.draw.rect(surf, (75, 72, 52), (0, 0, 2, STRIP_H))
+        # 3. Patient name + condition
+        x = (self.W - self.sub_surf.get_width()) // 2
+        overlay.blit(self.sub_surf, (x, y))
+        y += self.sub_surf.get_height() + 40
 
-        # Relation label — dim, small, top
-        rel_surf = self.fonts['small'].render(self._relation, True, DIM_COL)
-        surf.blit(rel_surf, (28, 18))
+        # 4. Continue prompt
+        x = (self.W - self.continue_surf.get_width()) // 2
+        overlay.blit(self.continue_surf, (x, y))
 
-        # The line — larger, more room to breathe
-        quote = f'"{self.line}"'
-        line_surf = self.fonts['medium'].render(quote, True, TEXT_COL)
-        surf.blit(line_surf, (28, 44))
-
-        # Thin rule
-        pygame.draw.line(surf, ACCENT_LINE, (28, 86), (W - 28, 86), 1)
-
-        # Patient name and condition — dim, bottom
-        name    = self.patient.get('name', '')
-        cond    = self.patient.get('condition', '')
-        subline = f"{name}  —  {cond}"
-        sub_surf = self.fonts['small'].render(subline, True, NAME_COL)
-        surf.blit(sub_surf, (28, 98))
-
-        # Apply overall alpha
-        surf.set_alpha(alpha)
-        self.screen.blit(surf, (0, y))
+        # Apply overall fade effect
+        overlay.set_alpha(self.alpha)
+        self.screen.blit(overlay, (0, 0))
