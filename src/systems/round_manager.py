@@ -43,7 +43,7 @@ class RoundManager:
     def submit_choice(self, chosen_id: str) -> dict:
         """
         Player has chosen a patient to treat.
-        Returns a result dict with outcome info.
+        Returns a result dict with outcome info and possible family moment.
         """
         passed_ids = [p['id'] for p in self.current_patients if p['id'] != chosen_id]
         chosen_patient = next(p for p in self.current_patients if p['id'] == chosen_id)
@@ -65,12 +65,17 @@ class RoundManager:
         # Update patient generator
         self.patient_generator.resolve_round(chosen_id, self.current_patients)
 
-        # Maybe trigger a family moment
-        family_line = self._maybe_generate_family_moment(chosen_patient, passed_ids)
+        # Generate family moment (returns (patient, line) or None)
+        family_info = self._maybe_generate_family_moment(chosen_patient, passed_ids)
+        family_patient = None
+        family_line = None
+        if family_info:
+            family_patient, family_line = family_info
 
         return {
             "chosen_patient": chosen_patient,
-            "family_line": family_line,       # None or a string
+            "family_patient": family_patient,   # <-- which patient the family belongs to
+            "family_line": family_line,         # <-- the line of dialogue
             "pressure": self.pressure,
             "round": self.current_round,
         }
@@ -102,12 +107,9 @@ class RoundManager:
     # Family moment
     # ------------------------------------------------------------------
 
-    def _maybe_generate_family_moment(self, chosen_patient: dict, passed_ids: list) -> str | None:
-        """
-        30% chance of a family moment per round.
-        Picks a patient at random (treated or passed) and generates a line.
-        """
-        if random.random() > 1:
+    def _maybe_generate_family_moment(self, chosen_patient: dict, passed_ids: list) -> tuple | None:
+        """Returns (patient, line) or None if no moment is triggered."""
+        if random.random() > 0.95:   # 30% chance to show a family moment
             return None
 
         all_patients = self.patient_generator.all_patients
@@ -116,7 +118,6 @@ class RoundManager:
 
         target = random.choice(all_patients)
 
-        # Determine status for context
         treated_ids = [p['id'] for p in self.patient_generator.treated]
         dead_ids = [p['id'] for p in self.patient_generator.dead]
 
@@ -130,8 +131,8 @@ class RoundManager:
             status = "waiting"
 
         print(f"[RoundManager] Generating family moment for {target['name']} ({status})...")
-        return generate_family_moment(target, status)
-
+        line = generate_family_moment(target, status)
+        return (target, line)
     # ------------------------------------------------------------------
     # Summary for ending detector
     # ------------------------------------------------------------------
