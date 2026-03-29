@@ -679,7 +679,7 @@ class BrainPuzzleMinigame(BaseMinigame):
             p['condition'], True, MUTED_COL), (36, 48))
         
         # Region top-right
-        reg = self.fonts['large'].render("OPERATING: HEAD", True, ACCENT_COL)
+        reg = self.fonts['large'].render("OPERATING: BRAIN", True, ACCENT_COL)
         self.screen.blit(reg, (W - reg.get_width() - 36, 28))
         
         # Instruction

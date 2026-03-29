@@ -11,8 +11,6 @@ from .panel import draw_panel
 from .title_screen import TitleScreen
 from .minigame import SurgeryMinigame
 from .family_overlay import FamilyOverlay
-from .surgery.body_targeting import BodyTargetingPhase
-from .surgery.body_data import condition_to_region
 
 # Import backend
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,28 +50,24 @@ def _start_game(screen, fonts, round_manager, outcome_tracker):
 
 def _run_surgery(screen, fonts, chosen):
     """
-    Runs body targeting then ECG minigame.
+    Runs the surgery minigame.
     Returns (wrong_clicks, minigame_passed).
-    Called once per patient — never re-entrant.
+    Body targeting is handled inside SurgeryMinigame.
     """
     pygame.event.clear()
 
-    region = chosen.get('region') or condition_to_region(chosen['condition'])
-    print(f"[Surgery] Region: {region} (API: {chosen.get('region')!r}, condition: {chosen['condition']!r})")
+    print(f"[Surgery] Starting surgery for patient: {chosen.get('name')}")
 
-    targeting    = BodyTargetingPhase(screen, fonts, chosen, region)
-    wrong_clicks = targeting.run()
-    print(f"[Surgery] Body targeting done. Wrong clicks: {wrong_clicks}")
-
-    pygame.event.clear()
-
-    mg              = SurgeryMinigame(screen, fonts, chosen)
+    # Only run the SurgeryMinigame - it handles body targeting internally
+    mg = SurgeryMinigame(screen, fonts, chosen)
     minigame_passed = mg.run()
     print(f"[Surgery] Minigame returned: {minigame_passed}")
 
     pygame.event.clear()
 
-    return wrong_clicks, minigame_passed
+    # Wrong clicks are tracked inside SurgeryMinigame and penalties are applied there
+    # Return 0 wrong clicks here since we don't want double penalty
+    return 0, minigame_passed
 
 
 def main():
@@ -203,10 +197,11 @@ def main():
                     else:
                         t = None
 
+                    # Run surgery - only one body targeting phase now
                     wrong_clicks, minigame_passed = _run_surgery(screen, fonts, chosen)
 
+                    # Apply penalty based on minigame result
                     effective_surv = chosen['survivability']
-                    effective_surv = max(5, effective_surv - (wrong_clicks * 8))
                     if not minigame_passed:
                         effective_surv = max(5, effective_surv - 18)
 

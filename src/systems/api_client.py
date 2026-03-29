@@ -50,13 +50,15 @@ Generate {2 if round_number > 3 else 3} hospital patients for round {round_numbe
 
 Rules:
 - Patients are specific, ordinary people 
-- Names for the patients must be unique. No repeats.
-- One patient should have low survivability (30-50%), one high (75-95%)
-- condition must be short — 2 to 3 words max. Exactly what appears on a hospital card.
-  Good: "Bowel perforation", "Ruptured appendix", "Internal haemorrhage"
+- Names for the patients must be unique. No repeats. And all of them must have Asian Surnames that start with Z.
+- One patient should have medium survivability (55-70%), one high (90-99%)
+- condition must short, 2 to 3 words and MUST relate to one and only to one of the given body parts: "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis".
+  condition is exactly what appears on a hospital card. 
+  examples in the form: "condition" -> "region"
+  Good: "Ruptured appendix" -> "abdomen", "Aortic dissection" → "chest", "Herniated disc" -> spine, "Achilles Tendinopathy" -> leg, "Cerebral aneurysm" -> "head", "Osteitis Pubis" -> "pelvis", "Radial tunnel syndrome" -> "arm".
   Bad: "Severe Sepsis from perforated bowel"
 - quote is one short sentence. Something true about them right now. It should be very dependent on the conditon they are in.
-  Good: "I'm sorry for all the fuss.", "It hurts so bad", "Can someone water my plants?"
+  Good: "I'm sorry for all the fuss.", "It hurts so bad", "Can someone water my plants?", "I have a daughter... where is she?"
 - Do not generate too many individuals with social weight.
 - social_weight: if true, also set social_weight_label to one of:
   "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
@@ -72,8 +74,8 @@ Return a JSON array with this exact structure:
     "id": "unique_string",
     "name": "Full Name",
     "age": 0,
-    "condition": "2-4 word condition",
-    "region": "chest",
+    "condition": "2 to 3 word condition",
+    "region": "pelvis",
     "severity": 0,
     "survivability": 0,
     "quote": "One sentence.",
@@ -108,12 +110,12 @@ Current patient:
 
 Rules:
 - Increase severity by 1-2 (max 10)
-- Decrease survivability by 8-15 (min 5)
+- Decrease survivability by 5-10 (min 5)
 - Change the quote subtly, not dramatically. Less energy. Less hope.
 - If times_passed >= 2, the quote becomes very short or quiet.
 - condition stays the same 2-4 word format — do NOT expand it.
 - Do NOT change name, age, id, background, social_weight, or social_weight_label.
-- region must be one of: "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis"
+- region MUST be one of: "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis"
   Match it to the condition. Examples:
   "Ruptured appendix" → "abdomen"
   "Aortic dissection" → "chest"
@@ -125,7 +127,10 @@ Return the full updated patient JSON object.
 """
     updated = _call_json(prompt, system)
     updated["times_passed"] = patient.get("times_passed", 0) + 1
+    if "region" not in updated and "region" in patient:
+        updated["region"] = patient["region"]
     return updated
+
 
 
 def generate_family_moment(patient: dict, status: str) -> str:

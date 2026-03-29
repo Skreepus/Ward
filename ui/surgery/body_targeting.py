@@ -30,6 +30,7 @@ class BodyTargetingPhase:
     WRONG_FLASH_DUR = 0.6
 
     def __init__(self, screen, fonts, patient: dict, correct_region: str):
+        print(f"[BodyTargetingPhase] INITIALIZED - correct_region: {correct_region}")
         self.screen         = screen
         self.fonts          = fonts
         self.patient        = patient
@@ -65,12 +66,18 @@ class BodyTargetingPhase:
 
     def run(self):
         """Blocks until correct region clicked. Returns wrong_attempts count."""
+        print(f"[BodyTargetingPhase] run() STARTED")
         clock = pygame.time.Clock()
 
         # Flush any stale events before we start
         pygame.event.clear()
 
+        loop_count = 0
         while self.result_region is None:
+            loop_count += 1
+            if loop_count % 60 == 0:  # Print every ~1 second
+                print(f"[BodyTargetingPhase] Waiting for correct click... (loop {loop_count})")
+            
             dt        = clock.tick(60) / 1000.0
             mouse_pos = pygame.mouse.get_pos()
 
@@ -103,21 +110,51 @@ class BodyTargetingPhase:
             self._draw(mouse_pos)
             pygame.display.flip()
 
-        # Brief correct flash before returning
-        self._show_correct()
+        print(f"[BodyTargetingPhase] EXITING - correct region clicked! Wrong attempts: {self.wrong_attempts}")
+        
+        # Quick visual feedback only - no extra loop
+        self._flash_correct()
+        
+        print(f"[BodyTargetingPhase] run() COMPLETE - returning {self.wrong_attempts}")
         return self.wrong_attempts
 
+    def _flash_correct(self):
+        """Brief green flash on correct region - quick visual feedback."""
+        print(f"[BodyTargetingPhase] _flash_correct() - showing green flash")
+        # Find the correct hotspot
+        for hs in BODY_HOTSPOTS:
+            region = hs[0]
+            if region == self.correct_region:
+                cx, cy, rx, ry = self._hotspot_screen_pos(hs)
+                
+                # Draw a quick green flash
+                flash_surf = pygame.Surface((rx * 2 + 8, ry * 2 + 8), pygame.SRCALPHA)
+                pygame.draw.ellipse(flash_surf, (60, 200, 80, 200), 
+                                   (0, 0, rx * 2 + 8, ry * 2 + 8))
+                self.screen.blit(flash_surf, (cx - rx - 4, cy - ry - 4))
+                pygame.display.flip()
+                break
+        
+        # Short delay so player sees the flash
+        pygame.time.wait(150)
+
     def _handle_click(self, pos):
+        print(f"[BodyTargetingPhase] _handle_click() at {pos}")
         for hs in BODY_HOTSPOTS:
             region = hs[0]
             cx, cy, rx, ry = self._hotspot_screen_pos(hs)
             if self._point_in_ellipse(*pos, cx, cy, rx, ry):
+                print(f"[BodyTargetingPhase] Clicked region: {region}, Correct region: {self.correct_region}")
                 if region == self.correct_region:
+                    print(f"[BodyTargetingPhase] ✓ CORRECT! Setting result_region = {region}")
                     self.result_region = region
                 else:
+                    print(f"[BodyTargetingPhase] ✗ WRONG! Wrong attempts +1")
                     self.wrong_flash[region] = self.WRONG_FLASH_DUR
                     self.wrong_attempts += 1
                 return
+        
+        print(f"[BodyTargetingPhase] Click missed all hotspots")
 
     def _draw(self, mouse_pos):
         self.screen.fill(BG_DARK)
@@ -227,22 +264,3 @@ class BodyTargetingPhase:
 
         inst_s = self.fonts['medium'].render(inst, True, inst_col)
         self.screen.blit(inst_s, ((W - inst_s.get_width()) // 2, H - 36))
-
-    def _show_correct(self):
-        """Brief green flash on correct region before exiting."""
-        end_time = pygame.time.get_ticks() + 600
-        clock    = pygame.time.Clock()
-
-        while pygame.time.get_ticks() < end_time:
-            clock.tick(60)
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-
-            self.screen.fill(BG_DARK)
-            self._draw_table()
-            self._draw_body()
-            self._draw_hotspots()
-            self._draw_ui()
-            pygame.display.flip()
