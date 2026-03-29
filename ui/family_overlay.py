@@ -1,25 +1,49 @@
 import pygame
 import sys
 import os
+import textwrap
 
-# Optional: add project path if needed
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+class TypewriterText:
+    """Animated text that reveals letters left to right"""
+    
+    def __init__(self, text, font, color, speed=35):
+        self.full_text = text
+        self.font = font
+        self.color = color
+        self.speed = speed
+        self.elapsed = 0.0
+        self.complete = False
+        
+    def update(self, dt):
+        if not self.complete:
+            self.elapsed += dt
+            if self.elapsed * self.speed >= len(self.full_text):
+                self.complete = True
+    
+    def get_text(self):
+        if self.complete:
+            return self.full_text
+        return self.full_text[:int(self.elapsed * self.speed)]
+    
+    def is_complete(self):
+        return self.complete
+    
+    def draw(self, surf, x, y):
+        text = self.get_text()
+        rendered = self.font.render(text, True, self.color)
+        surf.blit(rendered, (x, y))
 
 
 class FamilyOverlay:
     """
     Full‑screen modal that shows a family member's message.
-    Blocks all game input until dismissed (click or SPACE).
-    Matches the dark, pixel‑art aesthetic of WARD.
+    Solid black background with typewriter animation.
     """
 
     def __init__(self, screen, fonts, patient: dict, line: str):
-        """
-        screen: pygame display surface
-        fonts: dict with keys 'small', 'medium', 'large' (fallbacks provided)
-        patient: dict containing 'name', 'age', 'condition', etc.
-        line: the dialogue line from the family member
-        """
         self.screen = screen
         self.fonts = fonts
         self.patient = patient
@@ -27,79 +51,70 @@ class FamilyOverlay:
         self.done = False
 
         self.W, self.H = screen.get_size()
-
-        # Pre‑render all text surfaces (so we don't re‑render every frame)
-        self._render_texts()
-
+        
+        # Split the AI-generated text into lines for display
+        self.lines = self._prepare_lines(line)
+        
+        # Create typewriter animations for each line
+        self.typewriters = []
+        self._setup_typewriters()
+        
         # Animation state
-        self.alpha = 0               # current opacity (0‑255)
-        self.fade_speed = 500        # alpha per second
-        self.state = "fade_in"       # fade_in → hold → fade_out
-
-        # Optional auto‑dismiss (disabled by default – requires click/SPACE)
-        self.auto_dismiss = False
-        self.hold_time = 0.0
-
+        self.current_line_index = 0
+        self.line_delay_timer = 0
+        self.line_delay = 0.25  # seconds between lines
+        self.all_lines_complete = False
+        
+        self.alpha = 0
+        self.fade_speed = 400
+        self.state = "fade_in"
+        self._dismissed = False
+        
+        # Background box dimensions - full screen, solid black
+        self.bg_width = self.W - 100
+        self.bg_height = self.H - 100
+        self.bg_x = 50
+        self.bg_y = 50
+        
         print(f"[FamilyOverlay] Created for {patient.get('name', 'Unknown')}")
 
+    def _prepare_lines(self, text: str) -> list:
+        """Split the AI text into wrapped lines."""
+        paragraphs = text.split('\n')
+        lines = []
+        for para in paragraphs:
+            if para.strip():
+                wrapped = textwrap.wrap(para, width=70)
+                lines.extend(wrapped)
+            else:
+                lines.append('')
+        return lines
+
+    def _setup_typewriters(self):
+        """Create typewriter animations for each line."""
+        medium_font = self._get_font('medium', 20)
+        TEXT_COL = (220, 218, 190)  # Slightly brighter for dark background
+        
+        for line in self.lines:
+            if line == '':
+                self.typewriters.append(None)
+            else:
+                self.typewriters.append(TypewriterText(line, medium_font, TEXT_COL, speed=35))
+
     def _get_font(self, key: str, default_size: int):
-        """Return a font from self.fonts or a sensible fallback."""
         font = self.fonts.get(key)
         if font is None:
-            # Fallback to system monospace
             return pygame.font.SysFont('monospace', default_size)
         return font
 
-    def _render_texts(self):
-        """Render all static text elements."""
-        # Use fallback fonts if the provided ones are missing
-        small_font = self._get_font('small', 16)
-        medium_font = self._get_font('medium', 24)
-        large_font = self._get_font('large', 32)   # not used here, but available
-
-        # Colours (match the game's muted palette)
-        TEXT_COL = (190, 188, 150)      # warm off‑white
-        ACCENT_COL = (70, 68, 50)       # dark muted gold
-        NAME_COL = (100, 98, 78)        # dimmer gold
-        PROMPT_COL = (120, 118, 90)     # very dim for continue text
-
-        # Relation line (e.g., "A family member came in...")
-        relation = self._infer_relation(self.patient)
-        self.relation_surf = small_font.render(relation, True, ACCENT_COL)
-
-        # The quote (with quotes)
-        quote_text = f'"{self.line}"'
-        self.quote_surf = medium_font.render(quote_text, True, TEXT_COL)
-
-        # Patient name and condition
-        name = self.patient.get('name', 'Unknown')
-        cond = self.patient.get('condition', '')
-        subline = f"{name}  –  {cond}"
-        self.sub_surf = small_font.render(subline, True, NAME_COL)
-
-        # Continue prompt (only visible in "hold" state)
-        self.continue_surf = small_font.render(
-            "press SPACE to continue",
-            True, PROMPT_COL
-        )
-
-    def _infer_relation(self, patient: dict) -> str:
-        """Return a short description of the family member based on patient's age."""
-        age = patient.get("age", 40)
-        if age < 18:
-            return "A parent has been waiting outside."
-        elif age < 30:
-            return "Someone is at the desk. They have been there a while."
-        elif age < 50:
-            return "A family member came in. They do not know what to do with their hands."
-        elif age < 65:
-            return "Someone drove here. They are still in their coat."
-        else:
-            return "Someone has been sitting in the waiting area since this morning."
-
     def update(self, dt: float):
-        """Call this every frame with delta time in seconds."""
         if self.done:
+            return
+
+        if self._dismissed:
+            self.alpha = max(0, self.alpha - int(800 * dt))
+            if self.alpha <= 0:
+                self.done = True
             return
 
         if self.state == "fade_in":
@@ -107,72 +122,83 @@ class FamilyOverlay:
             if self.alpha >= 255:
                 self.alpha = 255
                 self.state = "hold"
-        elif self.state == "hold":
-            if self.auto_dismiss:
-                self.hold_time += dt
-                if self.hold_time >= 5.0:   # auto‑dismiss after 5 seconds
-                    self.state = "fade_out"
         elif self.state == "fade_out":
             self.alpha -= self.fade_speed * dt
             if self.alpha <= 0:
-                self.alpha = 0
                 self.done = True
+            return
+
+        # Update typewriter animations line by line
+        if not self.all_lines_complete and self.state == "hold":
+            if self.current_line_index < len(self.typewriters):
+                current_tw = self.typewriters[self.current_line_index]
+                
+                if current_tw is None:
+                    self.line_delay_timer += dt
+                    if self.line_delay_timer >= self.line_delay:
+                        self.current_line_index += 1
+                        self.line_delay_timer = 0
+                else:
+                    current_tw.update(dt)
+                    if current_tw.is_complete():
+                        self.line_delay_timer += dt
+                        if self.line_delay_timer >= self.line_delay:
+                            self.current_line_index += 1
+                            self.line_delay_timer = 0
+            else:
+                self.all_lines_complete = True
 
     def handle_event(self, event):
-        """
-        Call this from your main event loop while the overlay is active.
-        It will dismiss the overlay on mouse click or SPACE.
-        """
         if self.done:
             return
-        if self.state == "hold":
+        if self.all_lines_complete and self.state == "hold":
             if event.type == pygame.MOUSEBUTTONDOWN or \
                (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE):
                 self.state = "fade_out"
 
     def dismiss(self):
-        """Dismiss the overlay immediately (forced dismissal)."""
         if not self.done:
-            self.state = "fade_out"
-            # Force fast fade out
-            self.fade_speed = 800
+            self._dismissed = True
 
     def draw(self):
-        """Draw the full‑screen overlay (should be called last, after game drawing)."""
-        if self.done:
+        if self.done or self.alpha <= 0:
             return
 
-        # Create a semi‑transparent dark surface
-        overlay = pygame.Surface((self.W, self.H), pygame.SRCALPHA)
-        # Black with opacity based on current alpha (0‑255)
-        overlay.fill((0, 0, 0, int(self.alpha * 0.85)))
+        # SOLID BLACK BACKGROUND (no transparency)
+        black_bg = pygame.Surface((self.W, self.H))
+        black_bg.fill((0, 0, 0))
+        black_bg.set_alpha(self.alpha)
+        self.screen.blit(black_bg, (0, 0))
 
-        # Calculate vertical centering for all text blocks
-        total_height = (self.relation_surf.get_height() +
-                        self.quote_surf.get_height() +
-                        self.sub_surf.get_height() +
-                        self.continue_surf.get_height() + 60)
-        y = (self.H - total_height) // 2
+        # Text box with subtle border
+        box = pygame.Surface((self.bg_width, self.bg_height), pygame.SRCALPHA)
+        box.fill((5, 5, 8, int(self.alpha * 0.95)))  # Very dark gray box
+        pygame.draw.rect(box, (148, 148, 72, self.alpha), 
+                        (0, 0, self.bg_width, self.bg_height), 2)
+        
+        self.screen.blit(box, (self.bg_x, self.bg_y))
 
-        # 1. Relation line (small, above quote)
-        x = (self.W - self.relation_surf.get_width()) // 2
-        overlay.blit(self.relation_surf, (x, y))
-        y += self.relation_surf.get_height() + 20
+        # Draw typewriter lines
+        y_offset = self.bg_y + 60
+        line_height = 28
+        
+        for i, tw in enumerate(self.typewriters):
+            if i >= self.current_line_index + 1 and not self.all_lines_complete:
+                continue
+                
+            if tw is None:
+                y_offset += 15
+                continue
+                
+            x = self.bg_x + 40
+            tw.draw(self.screen, x, y_offset)
+            y_offset += line_height
 
-        # 2. Quote (larger)
-        x = (self.W - self.quote_surf.get_width()) // 2
-        overlay.blit(self.quote_surf, (x, y))
-        y += self.quote_surf.get_height() + 30
-
-        # 3. Patient name + condition
-        x = (self.W - self.sub_surf.get_width()) // 2
-        overlay.blit(self.sub_surf, (x, y))
-        y += self.sub_surf.get_height() + 40
-
-        # 4. Continue prompt
-        x = (self.W - self.continue_surf.get_width()) // 2
-        overlay.blit(self.continue_surf, (x, y))
-
-        # Apply overall fade effect
-        overlay.set_alpha(self.alpha)
-        self.screen.blit(overlay, (0, 0))
+        # Draw continue prompt
+        if self.all_lines_complete and self.state == "hold":
+            small_font = self._get_font('small', 14)
+            prompt_surf = small_font.render("Press SPACE or click to continue", 
+                                           True, (100, 98, 70))
+            prompt_x = self.bg_x + (self.bg_width - prompt_surf.get_width()) // 2
+            prompt_y = self.bg_y + self.bg_height - 35
+            self.screen.blit(prompt_surf, (prompt_x, prompt_y))

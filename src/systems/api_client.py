@@ -2,6 +2,8 @@ from google import genai
 import json
 import sys
 import os
+import random
+import re
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from config import MODEL, MAX_TOKENS, GOOGLE_API_KEY
@@ -23,6 +25,7 @@ def _call_json(prompt: str, system: str = None) -> dict | list:
     """API call that expects JSON back. Strips markdown fences and parses."""
     raw = _call(prompt, system)
     cleaned = raw.replace("```json", "").replace("```", "").strip()
+    
     # Find the first [ or { and last ] or } to extract just the JSON
     start = min(
         cleaned.find('[') if cleaned.find('[') != -1 else len(cleaned),
@@ -30,7 +33,14 @@ def _call_json(prompt: str, system: str = None) -> dict | list:
     )
     end = max(cleaned.rfind(']'), cleaned.rfind('}')) + 1
     cleaned = cleaned[start:end]
-    return json.loads(cleaned)
+    
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        print(f"[API] JSON parse error: {e}")
+        print(f"[API] Raw response: {raw[:500]}...")
+        # Return an empty list as fallback
+        return []
 
 
 def generate_patients(round_number: int, existing_patients: list) -> list:
@@ -40,7 +50,7 @@ def generate_patients(round_number: int, existing_patients: list) -> list:
     """
     system = (
         "You are generating patients for a hospital triage game. "
-        "Return ONLY valid JSON, no markdown, no explanation."
+        "Return ONLY valid JSON, no markdown, no explanation, no trailing commas."
     )
 
     existing_names = [p.get("name") for p in existing_patients]
@@ -48,47 +58,95 @@ def generate_patients(round_number: int, existing_patients: list) -> list:
     prompt = f"""
 Generate {2 if round_number > 3 else 3} hospital patients for round {round_number} of a triage game.
 
+IMPORTANT: Return ONLY valid JSON. No markdown. No trailing commas.
+
 Rules:
 - Patients are specific, ordinary people 
-- Names for the patients must be unique. No repeats. And all of them must have Asian Surnames that start with Z.
-- One patient should have medium survivability (55-70%), one high (90-99%)
-- condition must short, 2 to 3 words and MUST relate to one and only to one of the given body parts: "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis".
-  condition is exactly what appears on a hospital card. 
-  examples in the form: "condition" -> "region"
-  Good: "Ruptured appendix" -> "abdomen", "Aortic dissection" → "chest", "Herniated disc" -> spine, "Achilles Tendinopathy" -> leg, "Cerebral aneurysm" -> "head", "Osteitis Pubis" -> "pelvis", "Radial tunnel syndrome" -> "arm".
-  Bad: "Severe Sepsis from perforated bowel"
-- quote is one short sentence. Something true about them right now. It should be very dependent on the conditon they are in.
-  Good: "I'm sorry for all the fuss.", "It hurts so bad", "Can someone water my plants?", "I have a daughter... where is she?"
-- Do not generate too many individuals with social weight.
-- social_weight: if true, also set social_weight_label to one of:
-  "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
-  If false, set social_weight_label to null.
-- 
-- background is one sentence — who they are outside this hospital.
+- Names must be unique. No repeats.
+- One patient should have low survivability (30-50%), one high (75-95%)
+- condition: 2-4 words exactly
+- quote: one short sentence dependent on their condition
+- background: one sentence about who they are outside the hospital
+- region: one of "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis"
 
-Avoid these names (already in game): {existing_names}
+Avoid these names: {existing_names}
 
-Return a JSON array with this exact structure:
+Return a JSON array with this EXACT structure (no trailing commas):
 [
   {{
-    "id": "unique_string",
+    "id": "patient_001",
     "name": "Full Name",
-    "age": 0,
-    "condition": "2 to 3 word condition",
-    "region": "pelvis",
-    "severity": 0,
-    "survivability": 0,
-    "quote": "One sentence.",
+    "age": 45,
+    "condition": "Short condition",
+    "region": "chest",
+    "severity": 5,
+    "survivability": 70,
+    "quote": "One sentence quote.",
     "times_passed": 0,
     "social_weight": false,
-    "social_weight_label": null
-    
+    "social_weight_label": null,
+    "background": "One sentence background."
   }}
 ]
 
-severity is 1-10. survivability is 0-100 (percent with treatment).
+severity: 1-10. survivability: 0-100.
 """
-    return _call_json(prompt, system)
+    result = _call_json(prompt, system)
+    if not result:
+        # Return fallback patients if API fails
+        return _get_fallback_patients(round_number)
+    return result
+
+
+def _get_fallback_patients(round_number: int) -> list:
+    """Return fallback patients if API fails."""
+    fallbacks = [
+        {
+            "id": f"fallback_1_{round_number}",
+            "name": "Eleanor Vance",
+            "age": 72,
+            "condition": "Ruptured Aortic Aneurysm",
+            "region": "chest",
+            "severity": 9,
+            "survivability": 35,
+            "quote": "My chest... it feels like it's tearing apart.",
+            "times_passed": 0,
+            "social_weight": False,
+            "social_weight_label": None,
+            "background": "A retired librarian who lives alone with her cat."
+        },
+        {
+            "id": f"fallback_2_{round_number}",
+            "name": "Marcus Chen",
+            "age": 44,
+            "condition": "Ruptured Appendix",
+            "region": "abdomen",
+            "severity": 6,
+            "survivability": 88,
+            "quote": "I have a tax filing due Friday.",
+            "times_passed": 0,
+            "social_weight": False,
+            "social_weight_label": None,
+            "background": "An accountant who works too many hours."
+        },
+        {
+            "id": f"fallback_3_{round_number}",
+            "name": "Priya Nair",
+            "age": 28,
+            "condition": "Internal Haemorrhage",
+            "region": "chest",
+            "severity": 8,
+            "survivability": 61,
+            "quote": "Can someone water my plants?",
+            "times_passed": 0,
+            "social_weight": False,
+            "social_weight_label": None,
+            "background": "A botanist who just moved to the city."
+        },
+    ]
+    # Return 2 or 3 patients based on round number
+    num_patients = 2 if round_number > 3 else 3
+    return fallbacks[:num_patients]
 
 
 def deteriorate_patient(patient: dict) -> dict:
@@ -98,60 +156,95 @@ def deteriorate_patient(patient: dict) -> dict:
     """
     system = (
         "You are updating a hospital patient who has been waiting too long. "
-        "Return ONLY valid JSON, no markdown, no explanation."
+        "Return ONLY valid JSON, no markdown, no explanation, no trailing commas."
     )
 
     prompt = f"""
-This patient was passed over last round and has been waiting. Worsen their condition slightly.
-- Do NOT change region.
+Update this patient who was passed over:
 
 Current patient:
 {json.dumps(patient, indent=2)}
 
 Rules:
 - Increase severity by 1-2 (max 10)
-- Decrease survivability by 5-10 (min 5)
-- Change the quote subtly, not dramatically. Less energy. Less hope.
-- If times_passed >= 2, the quote becomes very short or quiet.
-- condition stays the same 2-4 word format — do NOT expand it.
-- Do NOT change name, age, id, background, social_weight, or social_weight_label.
-- region MUST be one of: "chest", "abdomen", "head", "arm", "leg", "spine", "pelvis"
-  Match it to the condition. Examples:
-  "Ruptured appendix" → "abdomen"
-  "Aortic dissection" → "chest"
-  "Tibia fracture" → "leg"
-  "Bowel perforation" → "abdomen"
-  "Cranial bleed" → "head"
+- Decrease survivability by 8-15 (min 5)
+- Change the quote to show less hope, less energy
+- If times_passed >= 2, make the quote very short
+- Do NOT change name, age, id, background, social_weight, region
 
-Return the full updated patient JSON object.
+Return ONLY the updated patient JSON object (no markdown, no trailing commas).
 """
-    updated = _call_json(prompt, system)
-    updated["times_passed"] = patient.get("times_passed", 0) + 1
-    if "region" not in updated and "region" in patient:
-        updated["region"] = patient["region"]
-    return updated
-
+    try:
+        updated = _call_json(prompt, system)
+        if updated:
+            updated["times_passed"] = patient.get("times_passed", 0) + 1
+            return updated
+    except Exception as e:
+        print(f"[API] Deterioration failed: {e}")
+    
+    # Fallback deterioration
+    patient["severity"] = min(10, patient.get("severity", 5) + 1)
+    patient["survivability"] = max(5, patient.get("survivability", 70) - 10)
+    patient["times_passed"] = patient.get("times_passed", 0) + 1
+    return patient
 
 
 def generate_family_moment(patient: dict, status: str) -> str:
     """
-    Generate a single line from a family member.
-    status: 'treated' | 'waiting' | 'passed_over' | 'died'
-    Returns a plain string.
+    Generate a hallway encounter with a family member.
+    Returns a narrative scene (4-5 sentences) with emotional weight.
     """
     system = (
-        "You are writing one line of dialogue for a family member in a hospital. "
-        "Return ONLY the line of dialogue, nothing else."
+        "You are a writer for a medical drama. Write a quiet, emotional scene (4-8 sentences). "
+        "Present tense. No markdown. Make it feel real, not melodramatic."
     )
 
-    prompt = f"""
-Patient: {patient['name']}, {patient['age']}, {patient['condition']}
-Background: {patient.get('background', 'No background available.')}
-Status: {status}
+    # Determine family relation based on patient's age
+    age = patient.get('age', 40)
+    if age < 18:
+        relation = random.choice(['father', 'mother', 'parent'])
+    elif age < 35:
+        relation = random.choice(['mother', 'father', 'partner', 'sister', 'brother', 'fiancé', 'fiancée'])
+    elif age < 55:
+        relation = random.choice(['wife', 'husband', 'partner', 'daughter', 'son', 'sister', 'brother'])
+    else:
+        relation = random.choice(['daughter', 'son', 'wife', 'husband', 'granddaughter', 'grandson'])
 
-Write one line a family member says right now.
-Not dramatic. Not a plea. Just something real and specific.
-Examples: "She asked me to bring her crossword book.", "I drove four hours.", "He hates hospitals. Always has."
+    prompt = f"""
+Write a scene where the doctor returns to the emergency ward after surgery.
+
+Patient who was NOT chosen: {patient['name']}, {patient['age']}, with {patient['condition']}
+Patient's background: {patient.get('background', 'No background available.')}
+Status: {status} (they are still waiting, or have been passed over before)
+Family relation: {relation}
+
+The scene:
+While walking back to the emergency ward, {patient['name']}'s {relation} approaches you.
+They have been waiting for hours. They know you chose someone else over their loved one.
+They are not angry. They are tired, worried, and quietly desperate.
+
+Write what they say. Make it honest. Make it stay with the player.
+
+Requirements:
+- Mention {patient['name']} by name at least once
+- Clearly state that this is {patient['name']}'s {relation}
+- Include physical details about the family member
+- Include little dialogue
+- End with a small, memorable detail
+- Keep it under 100 words
+- MUST use PRESENT TENSE and SECOND PERSON throughout
+- Adjectives should be used, but do not overdo them
+
+Examples of the style and tone:
+
+"An older man approaches you in the corridor. He is {patient['name']}'s husband. His hands shake as he holds a cold cup of coffee. 'The nurse said you'd come back,' he says. 'I've been waiting to tell you — she's getting worse. The pain is worse. She won't say it, but I can see it.' He does not wait for an answer. He just walks back to the waiting area and sits down next to an empty chair."
+
+"A young woman steps out from the corner of the waiting room. Dark circles shadow her eyes. 'You're the doctor who operated on the other patient,' she says. It is not a question. 'My father is {patient['name']}. He was here before that patient. He has been here all night.' She looks at the floor. 'I just wanted you to know his name. In case you forget.' Then she walks away."
+
+"A woman in a worn coat approaches you as you pass the waiting area. She is {patient['name']}'s wife. 'You walked past us twice,' she says quietly. 'I have been counting. He has been counting too, even though he won't admit it.' She looks at the door to the surgery wing. 'He is scared. He won't say that either. But I can tell. Please operate on him.'"
+
+The first line MUST be in the same structure as the examples given
+Write the scene for this patient.
 """
     return _call(prompt, system)
 
@@ -170,4 +263,8 @@ Minigame failed (complications): {minigame_failed}
 
 Write one clinical sentence describing the outcome.
 """
-    return _call(prompt, system)
+    try:
+        return _call(prompt, system)
+    except Exception as e:
+        print(f"[API] Outcome note failed: {e}")
+        return f"The patient {'survived' if survived else 'did not survive'} the procedure."
