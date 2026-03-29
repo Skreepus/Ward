@@ -13,7 +13,7 @@ from .minigame import SurgeryMinigame
 from .family_overlay import FamilyOverlay
 from .ending_screen import EndingScreen
 from .loading_screen import LoadingScreen
-from .surgery_loading_screen import SurgeryLoadingScreen   # NEW
+from .surgery_loading_screen import SurgeryLoadingScreen
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.systems.round_manager import RoundManager
@@ -21,7 +21,7 @@ from src.systems.outcome_manager import OutcomeTracker
 from src.systems.ending_detector import EndingDetector
 
 # ============================================
-# DEBUG SETTINGS - Change these for testing
+# DEBUG SETTINGS
 # ============================================
 SKIP_LOADING_SCREEN = False   # Set to True to skip the initial loading screen
 # ============================================
@@ -107,7 +107,7 @@ def main():
     if SKIP_LOADING_SCREEN:
         print("[Main] DEBUG MODE: Loading screen disabled")
 
-    # Outer restart loop – returns to title screen after each game
+    # Outer restart loop
     while True:
         # ---------- TITLE SCREEN ----------
         choice = TitleScreen(screen, fonts, bg_path=TITLE_BG).run()
@@ -220,14 +220,20 @@ def main():
                             selected_patient = 2
 
                     if event.key == pygame.K_RETURN and selected_patient is not None and not in_surgery:
+                        # --- START OF PATIENT SELECTION ---
                         in_surgery = True
                         chosen = current_patients[selected_patient]
                         passed = [p for i, p in enumerate(current_patients) if i != selected_patient]
                         print(f"[Main] Selected patient: {chosen['name']}")
 
+                        # --- SURGERY LOADING SCREEN (appears immediately) ---
+                        surgery_loading = SurgeryLoadingScreen(screen, fonts, patient_name=chosen.get('name'), duration=1.5)
+                        surgery_loading.run()
+                        # ----------------------------------------------------
+
                         result = round_manager.submit_choice(chosen['id'])
 
-                        # Pre-load next round in background (if game not over)
+                        # Pre-load next round in background
                         next_round_container = []
                         if not round_manager.is_game_over():
                             background_thread = threading.Thread(
@@ -238,11 +244,6 @@ def main():
                             background_thread.start()
                         else:
                             background_thread = None
-
-                        # --- NEW: Surgery loading screen ---
-                        surgery_loading = SurgeryLoadingScreen(screen, fonts, patient_name=chosen.get('name'), duration=0.3)
-                        surgery_loading.run()
-                        # ------------------------------------
 
                         # Run surgery
                         wrong_clicks, minigame_passed = _run_surgery(screen, fonts, chosen)
@@ -260,7 +261,7 @@ def main():
                         )
                         round_manager.resolve_surgery(survived, chosen['id'])
 
-                        # Family overlay (full‑screen modal)
+                        # Family overlay
                         family_patient = result.get('family_patient')
                         family_line = result.get('family_line')
                         if family_patient and family_line:
@@ -290,7 +291,7 @@ def main():
                             background_thread = None
                             continue
 
-                        # Check game over (after surgery, before round transition)
+                        # Check game over
                         if round_manager.is_game_over():
                             print("[Main] GAME OVER!")
                             total_deaths = len(round_manager.patient_generator.dead)
@@ -304,7 +305,6 @@ def main():
                             ending_data = ending_detector.detect()
                             print(f"[Main] Ending determined: {ending_data['title']}")
 
-                            # --- SAFE ENDING SCREEN DISPLAY ---
                             try:
                                 ending_screen = EndingScreen(screen, fonts, ending_data)
                                 result = ending_screen.run()
@@ -315,7 +315,6 @@ def main():
                                 print(f"[Main] ERROR showing ending screen: {e}")
                                 import traceback
                                 traceback.print_exc()
-                                # Fallback: wait for any key
                                 waiting = True
                                 while waiting:
                                     for ev in pygame.event.get():
@@ -324,18 +323,17 @@ def main():
                             running = False
                             break
 
-                        # Reset selection and surgery flag (overlay will handle round transition)
+                        # Reset for next round (overlay will handle transition)
                         selected_patient = None
                         in_surgery = False
 
             if not running:
                 break
 
-            # Update prompt only if no overlay
             if not active_overlay:
                 prompt.update(dt)
 
-            # ---------- DRAW ----------
+            # Draw
             screen.blit(img, (0, 0))
             screen.blit(dim, (0, 0))
 
@@ -367,7 +365,7 @@ def main():
 
             pygame.display.flip()
 
-        # End of game loop – goes back to title screen (outer while True)
+        # End of game loop – back to title screen
 
 if __name__ == "__main__":
     main()
