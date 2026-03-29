@@ -11,6 +11,7 @@ from .panel import draw_panel
 from .title_screen import TitleScreen
 from .minigame import SurgeryMinigame
 from .loading_screen import LoadingScreen
+from .family_overlay import FamilyOverlay
 
 # Import backend
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,7 +24,6 @@ WARD_BG  = "hospital4pixel.png"
 
 
 def _load_next_round_async(round_manager, result_container):
-    """Runs in background thread. Stores patients in result_container list."""
     try:
         patients = round_manager.start_round()
         result_container.append(("ok", patients))
@@ -32,13 +32,7 @@ def _load_next_round_async(round_manager, result_container):
 
 
 def _start_game(screen, fonts, round_manager, outcome_tracker):
-    """
-    Initialises a fresh game, shows loading screen while round 1 loads,
-    returns the first batch of patients.
-    """
     round_manager.start_game()
-
-    # Start loading round 1 immediately in background
     container = []
     t = threading.Thread(
         target=_load_next_round_async,
@@ -47,16 +41,14 @@ def _start_game(screen, fonts, round_manager, outcome_tracker):
     )
     t.start()
 
-    # Show loading screen — blocks until text done AND patients ready
     class _SimpleLoader:
-        def is_ready(self): 
+        def is_ready(self):
             return bool(container)
-        def get(self): 
+        def get(self):
             t.join()
             return container[0][1] if container and container[0][0] == "ok" else []
 
     LoadingScreen(screen, fonts).run(_SimpleLoader())
-
     t.join()
     if container and container[0][0] == "ok":
         return container[0][1]
@@ -78,16 +70,15 @@ def main():
         pygame.quit()
         sys.exit()
 
-    # ── LOADING SCREEN ────────────────────────────────────────────────────
-    round_manager = RoundManager()
-    outcome_tracker = OutcomeTracker()
-
-    # Loading screen masks the first API call
+    # ── GAME INIT ─────────────────────────────────────────────────────────
+    round_manager    = RoundManager()
+    outcome_tracker  = OutcomeTracker()
     current_patients = _start_game(screen, fonts, round_manager, outcome_tracker)
 
     selected_patient = None
-    round_num = 1
-    total_rounds = 6
+    round_num        = 1
+    total_rounds     = 6
+    active_overlay   = None   # FamilyOverlay instance or None
 
     prompt = Typewriter(
         "Three patients are waiting. One theatre is available. "
@@ -118,17 +109,16 @@ def main():
         ))
 
     # ── GAME LOOP ─────────────────────────────────────────────────────────
-    running           = True
-    family_line       = None
-    family_line_timer = 0
+    running = True
 
     while running:
         dt = clock.tick(FPS) / 1000.0
 
-        if family_line_timer > 0:
-            family_line_timer -= dt
-            if family_line_timer <= 0:
-                family_line = None
+        # Update family overlay
+        if active_overlay:
+            active_overlay.update(dt)
+            if active_overlay.done:
+                active_overlay = None
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -141,20 +131,23 @@ def main():
                         selected_patient = i
 
             if event.type == pygame.KEYDOWN:
+
+                # SPACE dismisses family overlay if active
+                if event.key == pygame.K_SPACE and active_overlay:
+                    active_overlay.dismiss()
+
                 if event.key == pygame.K_ESCAPE:
                     choice = TitleScreen(screen, fonts, bg_path=TITLE_BG).run()
                     if choice == 'quit':
                         running = False
                     elif choice == 'play':
-                        # Full reset — show loading screen again
-                        round_manager   = RoundManager()
-                        outcome_tracker = OutcomeTracker()
+                        round_manager    = RoundManager()
+                        outcome_tracker  = OutcomeTracker()
                         current_patients = _start_game(
                             screen, fonts, round_manager, outcome_tracker)
                         selected_patient  = None
                         round_num         = 1
-                        family_line       = None
-                        family_line_timer = 0
+                        active_overlay    = None
                         prompt = Typewriter(
                             "Three patients are waiting. One theatre is available. "
                             "Review each case carefully. Click on a patient card or press 1, 2 or 3 to select, "
@@ -165,21 +158,18 @@ def main():
                 if event.key == pygame.K_1 and len(current_patients) >= 1: selected_patient = 0
                 if event.key == pygame.K_2 and len(current_patients) >= 2: selected_patient = 1
                 if event.key == pygame.K_3 and len(current_patients) >= 3: selected_patient = 2
-                if event.key == pygame.K_SPACE: prompt.skip()
+                if event.key == pygame.K_SPACE and not active_overlay: prompt.skip()
 
                 if event.key == pygame.K_RETURN and selected_patient is not None:
-                    chosen  = current_patients[selected_patient]
-                    passed  = [p for i, p in enumerate(current_patients) if i != selected_patient]
+                    chosen = current_patients[selected_patient]
+                    passed = [p for i, p in enumerate(current_patients) if i != selected_patient]
 
                     print(f"[Main] Selected patient: {chosen['name']}")
-                    
-                    # ── Submit choice to backend ──────────────────────────
-                    result      = round_manager.submit_choice(chosen['id'])
-                    family_line = result.get('family_line')
-                    if family_line:
-                        family_line_timer = 3.0
 
-                    # ── Start loading next round in background ────────────
+                    # Submit choice to backend
+                    result = round_manager.submit_choice(chosen['id'])
+
+                    # Start loading next round in background
                     next_round_container = []
                     if not round_manager.is_game_over():
                         t = threading.Thread(
@@ -191,19 +181,19 @@ def main():
                     else:
                         t = None
 
-                    # ── Run minigame (masks API latency) ──────────────────
+                    # Run minigame
                     print(f"[Main] Starting SurgeryMinigame...")
                     mg              = SurgeryMinigame(screen, fonts, chosen)
                     minigame_passed = mg.run()
                     print(f"[Main] SurgeryMinigame returned: {minigame_passed}")
 
-                    # Surgery outcome — minigame fail reduces survivability
+                    # Surgery outcome
                     effective_surv = chosen['survivability']
                     if not minigame_passed:
                         effective_surv = max(5, effective_surv - 18)
                     survived = random.random() * 100 < effective_surv
 
-                    # ── Record outcome ────────────────────────────────────
+                    # Record outcome
                     outcome_tracker.record(
                         round_number    = round_num,
                         chosen_patient  = chosen,
@@ -213,9 +203,14 @@ def main():
                     )
                     round_manager.resolve_surgery(survived, chosen['id'])
 
+                    # Spawn family overlay after minigame if a line was generated
+                    family_line = result.get('family_line')
+                    if family_line:
+                        active_overlay = FamilyOverlay(screen, fonts, chosen, family_line)
+
                     print(f"[Main] After resolve_surgery. Round {round_num}/{total_rounds}")
 
-                    # ── Game over? ────────────────────────────────────────
+                    # Game over?
                     if round_manager.is_game_over():
                         print(f"[Main] GAME OVER!")
                         ending_detector = EndingDetector(
@@ -227,7 +222,6 @@ def main():
                         print(f"Ending: {ending['title']}")
                         running = False
                     else:
-                        # Wait for background thread if still loading
                         if t is not None:
                             t.join()
 
@@ -264,16 +258,6 @@ def main():
         ward_surf = fonts['time'].render("WARD B  —  GENERAL SURGERY", True, MUTED)
         screen.blit(ward_surf, (32, 38))
 
-        if family_line and family_line_timer > 0:
-            family_surf = fonts['medium'].render(family_line, True, ACCENT)
-            family_rect = family_surf.get_rect(center=(W // 2, 60))
-            bg_rect     = pygame.Rect(family_rect.x - 10, family_rect.y - 5,
-                                      family_rect.width + 20, family_rect.height + 10)
-            bg_surface  = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
-            bg_surface.fill((0, 0, 0, 180))
-            screen.blit(bg_surface, bg_rect)
-            screen.blit(family_surf, family_rect)
-
         mouse_pos = pygame.mouse.get_pos()
         for i, patient in enumerate(current_patients):
             cx         = card_start_x + i * (CARD_W + 28)
@@ -285,6 +269,10 @@ def main():
         draw_panel(screen, panel_rect, prompt, selected_patient,
                    round_num, total_rounds, time_str, fonts=fonts,
                    current_patients=current_patients)
+
+        # Family overlay drawn last — sits on top of everything
+        if active_overlay:
+            active_overlay.draw()
 
         pygame.display.flip()
 

@@ -107,7 +107,7 @@ class RoundManager:
         30% chance of a family moment per round.
         Picks a patient at random (treated or passed) and generates a line.
         """
-        if random.random() > 0.3:
+        if random.random() > 1:
             return None
 
         all_patients = self.patient_generator.all_patients
