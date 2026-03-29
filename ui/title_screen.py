@@ -169,11 +169,21 @@ class TitleScreen:
         ("WARD",                             "header"),
         ("A Medical Triage Game",            "body"),
         ("",                                 "gap"),
+        ("",                                 "gap"),
+        ("",                                 "gap"),
+
         ("Game Design & Development",        "label"),
-        ("Your Name Here",                   "name"),
+        ("Kenneth Wu -- Srineer Esarapu",                   "name"),
         ("",                                 "gap"),
-        ("Built with pygame + Anthropic API","body"),
+        ("Built with pygame in python for Hackiethon 2026","body"),
         ("",                                 "gap"),
+        ("",                                 "gap"),
+        ("",                                 "gap"),
+        ("",                                 "gap"),
+        ("",                                 "gap"),
+        ("",                                 "gap"),
+        ("",                                 "gap"),
+        
         ("[ ESC or click anywhere to close ]","hint"),
     ]
 
