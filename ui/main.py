@@ -3,7 +3,7 @@ import sys
 import os
 import random
 import threading
-from .config import W, H, IMG_H, PANEL_H, FPS, DIM_OVERLAY, MUTED, CARD_W, CARD_H, ACCENT
+from .config import W, H, IMG_H, PANEL_H, FPS, DIM_OVERLAY, MUTED, CARD_W, CARD_H
 from .fonts import init_fonts
 from .typewriter import Typewriter
 from .patient_card import draw_patient_card
@@ -11,9 +11,10 @@ from .panel import draw_panel
 from .title_screen import TitleScreen
 from .minigame import SurgeryMinigame
 from .family_overlay import FamilyOverlay
+from .ending_screen import EndingScreen
 from .loading_screen import LoadingScreen
+from .surgery_loading_screen import SurgeryLoadingScreen   # NEW
 
-# Import backend
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.systems.round_manager import RoundManager
 from src.systems.outcome_manager import OutcomeTracker
@@ -22,7 +23,7 @@ from src.systems.ending_detector import EndingDetector
 # ============================================
 # DEBUG SETTINGS - Change these for testing
 # ============================================
-SKIP_LOADING_SCREEN = True   # Set to True to skip loading screen, False to show it
+SKIP_LOADING_SCREEN = False   # Set to True to skip the initial loading screen
 # ============================================
 
 TITLE_BG = "title_screen.png"
@@ -53,13 +54,9 @@ def _load_next_round_async(round_manager, result_container):
 
 
 def _start_game_with_loading(screen, fonts, round_manager, outcome_tracker):
-    """
-    Start the game with optional loading screen while first round loads.
-    Returns the first batch of patients.
-    """
+    """Start the game with optional loading screen while first round loads."""
     round_manager.start_game()
     
-    # Create loader
     loader = RoundLoader()
     
     def load_first_round():
@@ -71,46 +68,32 @@ def _start_game_with_loading(screen, fonts, round_manager, outcome_tracker):
             print(f"[Main] Error loading first round: {e}")
             loader.set_ready([])
     
-    # Start loading in background
     load_thread = threading.Thread(target=load_first_round, daemon=True)
     load_thread.start()
     
-    # Show loading screen ONLY if not skipped
     if not SKIP_LOADING_SCREEN:
         loading = LoadingScreen(screen, fonts)
         loading.run(loader)
     else:
-        # Just wait for loading to complete without showing screen
         print("[Main] Skipping loading screen (debug mode)")
         while not loader.is_ready():
-            pygame.time.wait(100)  # Wait 100ms between checks
-            # Keep the event loop responsive
+            pygame.time.wait(100)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
     
-    # Return loaded patients
     return loader.patients
 
 
 def _run_surgery(screen, fonts, chosen):
-    """
-    Runs the surgery minigame.
-    Returns (wrong_clicks, minigame_passed).
-    Body targeting is handled inside SurgeryMinigame.
-    """
+    """Runs the surgery minigame. Returns (wrong_clicks, minigame_passed)."""
     pygame.event.clear()
-
     print(f"[Surgery] Starting surgery for patient: {chosen.get('name')}")
-
-    # Only run the SurgeryMinigame - it handles body targeting internally
     mg = SurgeryMinigame(screen, fonts, chosen)
     minigame_passed = mg.run()
     print(f"[Surgery] Minigame returned: {minigame_passed}")
-
     pygame.event.clear()
-
     return 0, minigame_passed
 
 
@@ -119,231 +102,272 @@ def main():
     screen = pygame.display.set_mode((W, H))
     pygame.display.set_caption("WARD")
     clock = pygame.time.Clock()
-
     fonts = init_fonts()
 
-    # Print debug mode status
     if SKIP_LOADING_SCREEN:
         print("[Main] DEBUG MODE: Loading screen disabled")
 
-    # ── TITLE SCREEN ──────────────────────────────────────────────────────
-    choice = TitleScreen(screen, fonts, bg_path=TITLE_BG).run()
-    if choice == 'quit':
-        pygame.quit()
-        sys.exit()
+    # Outer restart loop – returns to title screen after each game
+    while True:
+        # ---------- TITLE SCREEN ----------
+        choice = TitleScreen(screen, fonts, bg_path=TITLE_BG).run()
+        if choice == 'quit':
+            pygame.quit()
+            sys.exit()
 
-    # ── GAME INIT WITH OPTIONAL LOADING SCREEN ────────────────────────────
-    round_manager    = RoundManager()
-    outcome_tracker  = OutcomeTracker()
-    current_patients = _start_game_with_loading(screen, fonts, round_manager, outcome_tracker)
+        # ---------- GAME INIT ----------
+        round_manager = RoundManager()
+        outcome_tracker = OutcomeTracker()
+        current_patients = _start_game_with_loading(screen, fonts, round_manager, outcome_tracker)
 
-    selected_patient = None
-    round_num        = 1
-    total_rounds     = 6
-    active_overlay   = None
-    in_surgery       = False
+        selected_patient = None
+        round_num = 1
+        total_rounds = 6
+        active_overlay = None
+        in_surgery = False
+        family_moments_shown = 0
+        waiting_for_round_load = False
+        next_round_container = None
+        background_thread = None
 
-    prompt = Typewriter(
-        "Three patients are waiting. One theatre is available. "
-        "Review each case carefully. Click on a patient card or press 1, 2 or 3 to select, "
-        "then ENTER to send them to surgery."
-    )
+        prompt = Typewriter(
+            "Three patients are waiting. One theatre is available. "
+            "Review each case carefully. Click on a patient card or press 1, 2 or 3 to select, "
+            "then ENTER to send them to surgery."
+        )
 
-    try:
-        raw_img = pygame.image.load(WARD_BG).convert()
-        img     = pygame.transform.scale(raw_img, (W, IMG_H))
-    except Exception:
-        img = pygame.Surface((W, IMG_H))
-        img.fill((30, 30, 40))
-        print(f"Warning: could not load ward background '{WARD_BG}'")
+        try:
+            raw_img = pygame.image.load(WARD_BG).convert()
+            img = pygame.transform.scale(raw_img, (W, IMG_H))
+        except Exception:
+            img = pygame.Surface((W, IMG_H))
+            img.fill((30, 30, 40))
+            print(f"Warning: could not load ward background '{WARD_BG}'")
 
-    dim        = pygame.Surface((W, IMG_H), pygame.SRCALPHA)
-    dim.fill(DIM_OVERLAY)
-    panel_rect = (0, IMG_H, W, PANEL_H)
+        dim = pygame.Surface((W, IMG_H), pygame.SRCALPHA)
+        dim.fill(DIM_OVERLAY)
+        panel_rect = (0, IMG_H, W, PANEL_H)
 
-    card_rects    = []
-    total_cards_w = 3 * CARD_W + 2 * 32
-    card_start_x  = (W - total_cards_w) // 2
-    card_y        = (IMG_H - CARD_H) // 2 + 5
+        card_rects = []
+        total_cards_w = 3 * CARD_W + 2 * 32
+        card_start_x = (W - total_cards_w) // 2
+        card_y = (IMG_H - CARD_H) // 2 + 5
+        for i in range(3):
+            card_rects.append(pygame.Rect(
+                card_start_x + i * (CARD_W + 32), card_y, CARD_W, CARD_H
+            ))
 
-    for i in range(3):
-        card_rects.append(pygame.Rect(
-            card_start_x + i * (CARD_W + 32), card_y, CARD_W, CARD_H
-        ))
+        running = True
+        while running:
+            dt = clock.tick(FPS) / 1000.0
 
-    # ── GAME LOOP ─────────────────────────────────────────────────────────
-    running = True
-
-    while running:
-        dt = clock.tick(FPS) / 1000.0
-
-        if active_overlay:
-            active_overlay.update(dt)
-            if active_overlay.done:
-                active_overlay = None
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if not in_surgery:
-                    mouse_pos = pygame.mouse.get_pos()
-                    for i, card_rect in enumerate(card_rects):
-                        if card_rect.collidepoint(mouse_pos) and i < len(current_patients):
-                            selected_patient = i
-
-            if event.type == pygame.KEYDOWN:
-
-                # SPACE skips typewriter text or dismisses overlay
-                if event.key == pygame.K_SPACE:
-                    if active_overlay:
-                        active_overlay.dismiss()
-                    elif not in_surgery:
-                        prompt.skip()
-
-                if event.key == pygame.K_ESCAPE and not in_surgery:
-                    choice = TitleScreen(screen, fonts, bg_path=TITLE_BG).run()
-                    if choice == 'quit':
-                        running = False
-                    elif choice == 'play':
-                        # Reset everything
-                        round_manager    = RoundManager()
-                        outcome_tracker  = OutcomeTracker()
-                        current_patients = _start_game_with_loading(screen, fonts, round_manager, outcome_tracker)
-                        selected_patient  = None
-                        round_num         = 1
-                        active_overlay    = None
-                        in_surgery        = False
-                        prompt = Typewriter(
-                            "Three patients are waiting. One theatre is available. "
-                            "Review each case carefully. Click on a patient card or press 1, 2 or 3 to select, "
-                            "then ENTER to send them to surgery."
-                        )
-                    continue
-
-                if not in_surgery:
-                    if event.key == pygame.K_1 and len(current_patients) >= 1: selected_patient = 0
-                    if event.key == pygame.K_2 and len(current_patients) >= 2: selected_patient = 1
-                    if event.key == pygame.K_3 and len(current_patients) >= 3: selected_patient = 2
-
-                if event.key == pygame.K_RETURN and selected_patient is not None and not in_surgery:
-                    in_surgery = True
-
-                    chosen = current_patients[selected_patient]
-                    passed = [p for i, p in enumerate(current_patients) if i != selected_patient]
-
-                    print(f"[Main] Selected patient: {chosen['name']}")
-
-                    result = round_manager.submit_choice(chosen['id'])
-
-                    # Start loading next round in background (only if not game over)
-                    next_round_container = []
-                    next_round_thread = None
-                    if not round_manager.is_game_over():
-                        next_round_thread = threading.Thread(
-                            target=_load_next_round_async,
-                            args=(round_manager, next_round_container),
-                            daemon=True
-                        )
-                        next_round_thread.start()
-
-                    # Run surgery
-                    wrong_clicks, minigame_passed = _run_surgery(screen, fonts, chosen)
-
-                    # Apply penalty based on minigame result
-                    effective_surv = chosen['survivability']
-                    if not minigame_passed:
-                        effective_surv = max(5, effective_surv - 18)
-
-                    survived = random.random() * 100 < effective_surv
-
-                    outcome_tracker.record(
-                        round_number    = round_num,
-                        chosen_patient  = chosen,
-                        passed_patients = passed,
-                        survived        = survived,
-                        minigame_failed = not minigame_passed,
-                    )
-                    round_manager.resolve_surgery(survived, chosen['id'])
-
-                    family_line = result.get('family_line')
-                    if family_line:
-                        active_overlay = FamilyOverlay(screen, fonts, chosen, family_line)
-
-                    print(f"[Main] After resolve_surgery. Round {round_num}/{total_rounds}")
-
-                    if round_manager.is_game_over():
-                        print(f"[Main] GAME OVER!")
-                        ending_detector = EndingDetector(
-                            outcome_tracker,
-                            round_manager.pressure,
-                            round_manager.patient_generator.get_summary()
-                        )
-                        ending = ending_detector.detect()
-                        print(f"Ending: {ending['title']}")
-                        in_surgery = False
-                        running = False
-                    else:
-                        # Wait for background thread if still loading
-                        if next_round_thread is not None:
-                            next_round_thread.join()
-
-                        if next_round_container:
-                            status, payload = next_round_container[0]
-                            if status == "ok":
-                                current_patients = payload
-                                print(f"[Main] Round {round_num + 1} loaded with {len(current_patients)} patients")
-                            else:
-                                print(f"[main] Patient load error: {payload}")
-                                current_patients = round_manager.start_round()
+            # Update overlay
+            if active_overlay:
+                active_overlay.update(dt)
+                if active_overlay.done:
+                    active_overlay = None
+                    if waiting_for_round_load:
+                        waiting_for_round_load = False
+                        if background_thread:
+                            background_thread.join()
+                        if next_round_container and next_round_container[0][0] == "ok":
+                            current_patients = next_round_container[0][1]
                         else:
                             current_patients = round_manager.start_round()
-
-                        round_num       += 1
+                        round_num += 1
                         selected_patient = None
-                        in_surgery       = False
-
+                        in_surgery = False
                         prompt = Typewriter(
                             f"Round {round_num}. New patients have arrived. "
                             "Click on a patient card or press 1, 2 or 3 to select, "
                             "then ENTER to confirm."
                         )
+                        print(f"[Main] Round {round_num} loaded with {len(current_patients)} patients")
+                        next_round_container = None
+                        background_thread = None
 
-        prompt.update(dt)
+            # Event handling
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    break
 
-        # ── DRAW ──────────────────────────────────────────────────────────
-        screen.blit(img, (0, 0))
-        screen.blit(dim, (0, 0))
+                if active_overlay:
+                    active_overlay.handle_event(event)
+                    continue
 
-        time_remaining = round_manager.time_remaining()
-        time_str = f"{int(time_remaining // 60):02d}:{int(time_remaining % 60):02d}"
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if not in_surgery:
+                        mouse_pos = pygame.mouse.get_pos()
+                        for i, card_rect in enumerate(card_rects):
+                            if card_rect.collidepoint(mouse_pos) and i < len(current_patients):
+                                selected_patient = i
 
-        time_surf = fonts['time'].render(time_str, True, (200, 200, 200))
-        screen.blit(time_surf, (32, 20))
-        ward_surf = fonts['time'].render("WARD B  —  GENERAL SURGERY", True, MUTED)
-        screen.blit(ward_surf, (32, 38))
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE and not in_surgery:
+                        prompt.skip()
 
-        mouse_pos = pygame.mouse.get_pos()
-        for i, patient in enumerate(current_patients):
-            cx         = card_start_x + i * (CARD_W + 28)
-            is_hovered = card_rects[i].collidepoint(mouse_pos)
-            draw_patient_card(screen, cx, card_y, patient,
-                              selected=(selected_patient == i),
-                              index=i + 1, fonts=fonts, hovered=is_hovered)
+                    if event.key == pygame.K_ESCAPE and not in_surgery:
+                        running = False
+                        break
 
-        draw_panel(screen, panel_rect, prompt, selected_patient,
-                   round_num, total_rounds, time_str, fonts=fonts,
-                   current_patients=current_patients)
+                    if not in_surgery:
+                        if event.key == pygame.K_1 and len(current_patients) >= 1:
+                            selected_patient = 0
+                        if event.key == pygame.K_2 and len(current_patients) >= 2:
+                            selected_patient = 1
+                        if event.key == pygame.K_3 and len(current_patients) >= 3:
+                            selected_patient = 2
 
-        if active_overlay:
-            active_overlay.draw()
+                    if event.key == pygame.K_RETURN and selected_patient is not None and not in_surgery:
+                        in_surgery = True
+                        chosen = current_patients[selected_patient]
+                        passed = [p for i, p in enumerate(current_patients) if i != selected_patient]
+                        print(f"[Main] Selected patient: {chosen['name']}")
 
-        pygame.display.flip()
+                        result = round_manager.submit_choice(chosen['id'])
 
-    pygame.quit()
-    sys.exit()
+                        # Pre-load next round in background (if game not over)
+                        next_round_container = []
+                        if not round_manager.is_game_over():
+                            background_thread = threading.Thread(
+                                target=_load_next_round_async,
+                                args=(round_manager, next_round_container),
+                                daemon=True
+                            )
+                            background_thread.start()
+                        else:
+                            background_thread = None
 
+                        # --- NEW: Surgery loading screen ---
+                        surgery_loading = SurgeryLoadingScreen(screen, fonts, patient_name=chosen.get('name'), duration=0.3)
+                        surgery_loading.run()
+                        # ------------------------------------
+
+                        # Run surgery
+                        wrong_clicks, minigame_passed = _run_surgery(screen, fonts, chosen)
+                        effective_surv = chosen['survivability']
+                        if not minigame_passed:
+                            effective_surv = max(5, effective_surv - 18)
+                        survived = random.random() * 100 < effective_surv
+
+                        outcome_tracker.record(
+                            round_number=round_num,
+                            chosen_patient=chosen,
+                            passed_patients=passed,
+                            survived=survived,
+                            minigame_failed=not minigame_passed,
+                        )
+                        round_manager.resolve_surgery(survived, chosen['id'])
+
+                        # Family overlay (full‑screen modal)
+                        family_patient = result.get('family_patient')
+                        family_line = result.get('family_line')
+                        if family_patient and family_line:
+                            family_moments_shown += 1
+                            print(f"[Main] Creating full‑screen overlay for {family_patient.get('name')}")
+                            active_overlay = FamilyOverlay(screen, fonts, family_patient, family_line)
+                            waiting_for_round_load = True
+                        else:
+                            # No overlay – proceed immediately
+                            waiting_for_round_load = False
+                            if background_thread:
+                                background_thread.join()
+                            if next_round_container and next_round_container[0][0] == "ok":
+                                current_patients = next_round_container[0][1]
+                            else:
+                                current_patients = round_manager.start_round()
+                            round_num += 1
+                            selected_patient = None
+                            in_surgery = False
+                            prompt = Typewriter(
+                                f"Round {round_num}. New patients have arrived. "
+                                "Click on a patient card or press 1, 2 or 3 to select, "
+                                "then ENTER to confirm."
+                            )
+                            print(f"[Main] Round {round_num} loaded with {len(current_patients)} patients")
+                            next_round_container = None
+                            background_thread = None
+                            continue
+
+                        # Check game over (after surgery, before round transition)
+                        if round_manager.is_game_over():
+                            print("[Main] GAME OVER!")
+                            total_deaths = len(round_manager.patient_generator.dead)
+                            ending_detector = EndingDetector(
+                                outcome_tracker,
+                                round_manager.pressure,
+                                round_manager.patient_generator.get_summary(),
+                                total_deaths=total_deaths,
+                                family_moments=family_moments_shown
+                            )
+                            ending_data = ending_detector.detect()
+                            print(f"[Main] Ending determined: {ending_data['title']}")
+
+                            # --- SAFE ENDING SCREEN DISPLAY ---
+                            try:
+                                ending_screen = EndingScreen(screen, fonts, ending_data)
+                                result = ending_screen.run()
+                                if result == "quit":
+                                    pygame.quit()
+                                    sys.exit()
+                            except Exception as e:
+                                print(f"[Main] ERROR showing ending screen: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                # Fallback: wait for any key
+                                waiting = True
+                                while waiting:
+                                    for ev in pygame.event.get():
+                                        if ev.type == pygame.QUIT or ev.type == pygame.KEYDOWN:
+                                            waiting = False
+                            running = False
+                            break
+
+                        # Reset selection and surgery flag (overlay will handle round transition)
+                        selected_patient = None
+                        in_surgery = False
+
+            if not running:
+                break
+
+            # Update prompt only if no overlay
+            if not active_overlay:
+                prompt.update(dt)
+
+            # ---------- DRAW ----------
+            screen.blit(img, (0, 0))
+            screen.blit(dim, (0, 0))
+
+            time_remaining = round_manager.time_remaining()
+            time_str = f"{int(time_remaining // 60):02d}:{int(time_remaining % 60):02d}"
+            time_surf = fonts['time'].render(time_str, True, (200, 200, 200))
+            screen.blit(time_surf, (32, 20))
+            ward_surf = fonts['time'].render("WARD B  –  GENERAL SURGERY", True, MUTED)
+            screen.blit(ward_surf, (32, 38))
+
+            mouse_pos = pygame.mouse.get_pos()
+            for i, patient in enumerate(current_patients):
+                cx = card_start_x + i * (CARD_W + 28)
+                is_hovered = card_rects[i].collidepoint(mouse_pos)
+                draw_patient_card(
+                    screen, cx, card_y, patient,
+                    selected=(selected_patient == i),
+                    index=i+1, fonts=fonts, hovered=is_hovered
+                )
+
+            draw_panel(
+                screen, panel_rect, prompt, selected_patient,
+                round_num, total_rounds, time_str, fonts=fonts,
+                current_patients=current_patients
+            )
+
+            if active_overlay:
+                active_overlay.draw()
+
+            pygame.display.flip()
+
+        # End of game loop – goes back to title screen (outer while True)
 
 if __name__ == "__main__":
     main()

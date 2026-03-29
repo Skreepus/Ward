@@ -1,46 +1,37 @@
 import pygame
-import time
-import os
 import sys
+import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-
-# ── Colours ───────────────────────────────────────────────────────────────
+# Colours
 BG_COL    = (6, 6, 6)
 TEXT_COL  = (190, 188, 150)
 DIM_COL   = (90, 88, 70)
 LINE_COL  = (35, 35, 30)
 DOT_COL   = (120, 118, 90)
 
-
-# ── Story lines — shown one at a time, typewriter style ──────────────────
+# Story lines — shown one at a time, typewriter style
 BRIEFING = [
     ("", 0.0),
-    ("03:47.",                                                              1.2),
-    ("You are already here.",                                              1.8),
-    ("",                                                                   0.6),
-    ("The previous doctor went home four hours ago.",                      2.0),
-    ("You were called in",                            1.8),
-    ("You did not ask.",                                                   1.4),
-    ("",                                                                   0.6),
-    ("One theatre. One surgeon on call.",                                  1.8),
-    ("One window.",                                                        2.2),
-    ("",                                                                   0.6),
-    ("",                                                                   0.5),
-    ("Time to clock in",                                                            2.8),
+    ("03:47.", 1.2),
+    ("You are already here.", 1.8),
+    ("", 0.6),
+    ("The previous doctor went home four hours ago.", 2.0),
+    ("You were called in", 1.8),
+    ("You did not ask.", 1.4),
+    ("", 0.6),
+    ("One theatre. One surgeon on call.", 1.8),
+    ("One window.", 2.2),
+    ("", 0.6),
+    ("", 0.5),
+    ("Time to clock in", 2.8),
 ]
-
 
 class LoadingScreen:
     """
     Displays the briefing text one line at a time while the first round
     loads in the background.
-
-    Usage:
-        ls = LoadingScreen(screen, fonts)
-        ls.run(loader)   # loader is a NextRoundLoader — blocks until
-                         # both text is done AND patients are ready
     """
 
     CPS       = 28      # characters per second for typewriter
@@ -66,13 +57,13 @@ class LoadingScreen:
     def run(self, loader=None):
         """
         Runs the loading screen.
-        loader: optional NextRoundLoader — waits for it before fading out.
+        loader: optional RoundLoader — waits for it before fading out.
         """
         clock         = pygame.time.Clock()
         line_index    = 0
-        char_progress = 0.0    # how many chars of current line are shown
-        line_hold     = 0.0    # pause timer between lines
-        shown_lines   = []     # list of (text, style) already fully shown
+        char_progress = 0.0
+        line_hold     = 0.0
+        shown_lines   = []
         text_done     = False
         fading_out    = False
 
@@ -87,17 +78,16 @@ class LoadingScreen:
                     if event.key == pygame.K_SPACE and text_done:
                         fading_out = True
 
-            # ── Fade in ───────────────────────────────────────────────────
+            # Fade in
             if self._fade_alpha > 0:
                 self._fade_alpha = max(0, self._fade_alpha - 220 * dt)
 
-            # ── Typewriter progress ───────────────────────────────────────
+            # Typewriter progress
             if not text_done and self._fade_alpha == 0:
                 if line_index < len(BRIEFING):
                     text, hold_time = BRIEFING[line_index]
 
                     if text == "":
-                        # Empty line — just pause
                         line_hold += dt
                         if line_hold >= hold_time:
                             line_hold = 0.0
@@ -108,17 +98,16 @@ class LoadingScreen:
                         chars_shown = int(char_progress)
 
                         if chars_shown >= len(text):
-                            # Line complete — hold then advance
                             line_hold += dt
                             if line_hold >= hold_time:
-                                line_hold     = 0.0
+                                line_hold = 0.0
                                 char_progress = 0.0
                                 shown_lines.append((text, "done"))
-                                line_index   += 1
+                                line_index += 1
                 else:
                     text_done = True
 
-            # ── Auto fade out once text done and loader ready ─────────────
+            # Auto fade out once text done and loader ready
             if text_done:
                 loader_ready = (loader is None) or loader.is_ready()
                 if loader_ready:
@@ -127,9 +116,9 @@ class LoadingScreen:
             if fading_out:
                 self._fade_out_alpha = min(255, self._fade_out_alpha + 180 * dt)
                 if self._fade_out_alpha >= 255:
-                    return   # done
+                    return
 
-            # ── Draw ──────────────────────────────────────────────────────
+            # Draw
             self.screen.fill(BG_COL)
             self._draw_lines(shown_lines, line_index, char_progress)
             self._draw_footer(text_done, loader)
@@ -183,7 +172,6 @@ class LoadingScreen:
 
         # Status
         if loader and not loader.is_ready():
-            # Animated dots while loading
             dots = "." * (int(pygame.time.get_ticks() / 400) % 4)
             status = f"Preparing patient records{dots}"
             col    = DIM_COL
