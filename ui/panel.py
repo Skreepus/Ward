@@ -48,7 +48,7 @@ def draw_panel(surf, rect, prompt_tw, selected, round_num, total_rounds, time_st
 
     # Confirm hint - LARGER and centered
     if selected is not None:
-        conf = fonts['large'].render("▶ ENTER TO CONFIRM ◀", True, ACCENT)  # Changed to 'large' font
+        conf = fonts['large'].render("press ENTER to confirm", True, ACCENT)  # Changed to 'large' font
         conf_rect = conf.get_rect(center=(W//2, py + ph - 25))  # Moved up slightly
         surf.blit(conf, conf_rect)
     else:
