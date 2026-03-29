@@ -79,7 +79,7 @@ class FamilyOverlay:
 
         # Continue prompt (only visible in "hold" state)
         self.continue_surf = small_font.render(
-            "Click anywhere or press SPACE to continue",
+            "press SPACE to continue",
             True, PROMPT_COL
         )
 
@@ -129,6 +129,13 @@ class FamilyOverlay:
             if event.type == pygame.MOUSEBUTTONDOWN or \
                (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE):
                 self.state = "fade_out"
+
+    def dismiss(self):
+        """Dismiss the overlay immediately (forced dismissal)."""
+        if not self.done:
+            self.state = "fade_out"
+            # Force fast fade out
+            self.fade_speed = 800
 
     def draw(self):
         """Draw the full‑screen overlay (should be called last, after game drawing)."""
