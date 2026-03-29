@@ -109,14 +109,14 @@ class RoundManager:
 
     def _maybe_generate_family_moment(self, chosen_patient: dict, passed_ids: list) -> tuple | None:
         """Returns (patient, line) or None if no moment is triggered."""
-        if random.random() > 0.95:   # 30% chance to show a family moment
+        if False:  
             return None
 
-        all_patients = self.patient_generator.all_patients
-        if not all_patients:
+        waiting = self.patient_generator.waiting
+        if not waiting:
             return None
 
-        target = random.choice(all_patients)
+        target = random.choice(waiting)
 
         treated_ids = [p['id'] for p in self.patient_generator.treated]
         dead_ids = [p['id'] for p in self.patient_generator.dead]
