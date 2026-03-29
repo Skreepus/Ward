@@ -7,6 +7,8 @@ from .reaction_minigame import ReactionMinigame
 from .cutscene_success import SuccessCutscene
 from .cutscene_failure import FailureCutscene
 from .spine_minigame import SpineMinigame
+from .arm_minigame import ArmMinigame
+from .leg_minigame import LegMinigame
 
 __all__ = [
     'BaseMinigame', 

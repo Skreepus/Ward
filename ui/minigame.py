@@ -17,18 +17,18 @@ import pygame
 import sys
 from .surgery.body_targeting import BodyTargetingPhase
 from .surgery.body_data import condition_to_region
-from .minigames import ECGMinigame, ReactionMinigame, SpineMinigame
+from .minigames import ECGMinigame, ReactionMinigame, SpineMinigame, ArmMinigame, LegMinigame
 
 # ── Region → Sub-minigame mapping ─────────────────────────────────────────
 # Add new minigames here as you create them
 REGION_MINIGAMES = {
-    "chest": SpineMinigame,
-    "head": SpineMinigame,
-    "abdomen": SpineMinigame,
-    "pelvis": SpineMinigame,
-    "arm": SpineMinigame,
-    "spine": SpineMinigame,
-    "leg": SpineMinigame,
+    "chest": LegMinigame,
+    "head": LegMinigame,
+    "abdomen": LegMinigame,
+    "pelvis": LegMinigame,
+    "arm": LegMinigame,
+    "spine": LegMinigame,
+    "leg": LegMinigame,
 }
 
 
