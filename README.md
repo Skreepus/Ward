@@ -23,7 +23,8 @@ open .env and add your Google API key. Get one from Google AI Studio
 
 5. **Run the game**
 python run.py
-
+or 
+python -m ui.main
 **Controls**
 1, 2, 3 – select a patient card
 
