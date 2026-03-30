@@ -7,7 +7,7 @@ Made for [Hackathon Name].
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/ward.git
+   git clone https://github.com/Skreepus/Ward
    cd ward
 
 2. **Create and activate a virtual environment**
