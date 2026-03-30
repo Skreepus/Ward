@@ -5,44 +5,57 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
 ENDINGS = {
-    "clinical_perfection": {
+    "clinical_perfection": { # nobody dies
         "id": "clinical_perfection",
         "title": "Clinical Perfection",
         "subtitle": "Your record is clean.",
         "body": (
-            "Every decision you made was defensible.\n"
-            "The numbers support you.\n"
+            "Your shift has ended.\n\n"
+            "The board reviewed your shift. Every decision you made was defensible.\n"
+            "You followed the data. You chose the patients with the highest survivability.\n"
             "No complaints have been filed.\n\n"
-            "There is one patient you saw several times.\n"
+            "One patient, you saw their file three times. Three times you passed them over.\n"
             "They died waiting.\n\n"
-            "Nothing about your decisions was incorrect."
+            "The hospital will not mention this in their evaluation.\n"
+            "There is no protocol for regret. No box to check.\n\n"
+            "You saved lives tonight. The numbers prove it.\n"
+            "Yet the numbers will not tell you if you did the right thing.\n"
+            "Did you do the right thing?"
+
         ),
     },
-    "promoted": {
+    "promoted": {  # helped a spesh person
         "id": "promoted",
         "title": "Promoted",
         "subtitle": "The Chief of Medicine would like to see you.",
         "body": (
-            "The board has been watching your work.\n"
+            "Your shift has ended.\n\n"
+            "The board has been watching your work for some time.\n"
             "You understand how this hospital functions.\n"
-            "There is a position available.\n\n"
+            "The patients with influence were treated first. You made the right people happy.\n"
+            "You made the right people happy.\n"
+            "You made the right people happy.\n"
+            "Did you do the right thing?\n\n\n"
+            "There is a position available.\n"
             "Your new office has a window.\n"
-            "You will no longer see patients.\n\n"
-            "None of the patients from your last shift\n"
-            "were part of the promotion decision."
+            "You will no longer see patients. You will manage the ones who do.\n\n"
+            "You have been promoted, do you feel proud?"
         ),
     },
-    "still_on_the_list": {
+    "still_on_the_list": {    # 
         "id": "still_on_the_list",
         "title": "Still On The List",
         "subtitle": "",
         "body": (
             "Your shift has ended.\n\n"
-            "One patient was never seen.\n"
-            "They are still in the system.\n"
-            "Their file has been passed to the next doctor.\n\n"
-            "They were on the list when you arrived.\n"
-            "They are still on the list now."
+            "There is one patient you never saw. Their name is still on the board.\n"
+            "They were there when you arrived. They were there when you left.\n"
+            "Their file has been passed to the next doctor.\n"
+            "The next doctor will make their own choices.\n"
+            "They will see the file. The one you never opened.\n\n\n"
+
+            "In triage, someone always waits. Someone always will.\n"
+            "That is not a defect. That is the design.\n"
         ),
     },
     "ghosts": {
@@ -50,23 +63,28 @@ ENDINGS = {
         "title": "Ghosts",
         "subtitle": "",
         "body": (
-            "Too many patients did not leave this ward tonight.\n\n"
+            "Your shift has ended.\n\n"
+            "There were many patients at the ward tonight.\n"
+            "There were many patients who didn't leave the ward tonight\n\n"
             "The hospital will not speak of it publicly.\n"
             "There will be a review.\n"
             "You will be asked to provide notes.\n\n"
             "The names are below."
         ),
     },
-    "the_complaint": {
+    "the_complaint": {         
         "id": "the_complaint",
         "title": "The Complaint",
         "subtitle": "A formal complaint has been filed.",
         "body": (
-            "A family member has submitted a complaint.\n"
-            "It was filed at 04:12.\n\n"
-            "The complaint does not concern a death.\n"
-            "It concerns something that was said,\n"
-            "or not said, in the corridor.\n\n"
+            "Your shift has ended.\n\n"
+            "A family member has submitted a formal complaint.\n"
+            "It was filed at 04:12. Twelve minutes after the surgery ended.\n\n"
+            "The complaint does not concern a death. The patient survived.\n"
+            "It concerns something that was said. Or not said. In the corridor.\n"
+            "You remember the corridor. You remember the face.\n"
+            "You do not remember the words.\n\n"
+            "A doctor hardly remembers their patients\n\n"
             "HR has been notified.\n"
             "You will receive a letter."
         ),

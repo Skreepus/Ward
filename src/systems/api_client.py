@@ -75,8 +75,28 @@ def generate_patients(round_number: int, existing_patients: list) -> list:
 
     existing_names = [p.get("name") for p in existing_patients]
 
+    # Force a social weight patient in round 3
+    force_social_weight = (round_number == 3)
+    
+    # Determine number of patients
+    num_patients = 2 if round_number > 3 else 3
+    
+    # Social weight instruction
+    social_weight_instruction = ""
+    if force_social_weight:
+        social_weight_instruction = """
+- IMPORTANT: This is round 3. One of these patients MUST have social_weight = true.
+  Choose one patient to have social_weight = true and assign them a social_weight_label.
+  Make it a high-profile person (HOSPITAL DONOR, CITY COUNCILLOR, HEALTH MINISTRY ADVISOR, BOARD OF TRUSTEES, etc.)
+  The other patients should have social_weight = false.
+"""
+    else:
+        social_weight_instruction = """
+- Do not have many individuals with social weight, it should be rare.
+"""
+
     prompt = f"""
-Generate {2 if round_number > 3 else 3} hospital patients for round {round_number} of a triage game.
+Generate {num_patients} hospital patients for round {round_number} of a triage game.
 
 Rules:
 - Patients are specific, ordinary people 
@@ -96,7 +116,7 @@ Rules:
   Examples: "A retired librarian who lives alone. She was found unconscious in her garden."
   "An accountant who works too many hours. He has chronic back pain. He was at his computer when he felt a sharp pain in his spine"
   "A botanist with no prior medical history. She was unpacking boxes when she fell on her outstretched hand."
-- Do not have many individuals with social weight, it should be rare.
+{social_weight_instruction}
 - social_weight: if true, also set social_weight_label to one of:
   "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "HEALTH MINISTRY ADVISOR"
     If false, set social_weight_label to null.
@@ -125,7 +145,21 @@ Return a JSON array with this exact structure:
 
 
 """
-    return _call_json(prompt, system)
+    patients = _call_json(prompt, system)
+    
+    # Fallback: If round 3 and no social weight patient, force one
+    if force_social_weight and patients and len(patients) > 0:
+        has_social = any(p.get("social_weight", False) for p in patients)
+        if not has_social:
+            # Force the first patient to have social weight
+            patients[0]["social_weight"] = True
+            patients[0]["social_weight_label"] = random.choice([
+                "HOSPITAL DONOR", "CITY COUNCILLOR", 
+                "HEALTH MINISTRY ADVISOR", "BOARD OF TRUSTEES"
+            ])
+            print(f"[API] Forced social weight patient in round 3: {patients[0]['name']}")
+    
+    return patients
 
 
 def _get_fallback_patients(round_number: int) -> list:
