@@ -113,7 +113,7 @@ def _show_outcome(screen, fonts, patient, survived, minigame_passed):
     elif not survived and minigame_passed:
         title = "CLEAN PROCEDURE"
         title_col = (180, 160, 80)
-        sub = f"The surgery was textbook.However, \n{patient['name']} did not survive."
+        sub = f"The surgery was textbook. However, \n{patient['name']} did not survive."
         sub_col = (160, 140, 120)
     else:
         title = "OPERATION UNSUCCESSFUL"
