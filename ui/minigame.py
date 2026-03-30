@@ -25,19 +25,20 @@ from .minigames import (
     LegMinigame,
     PelvisMinigame,
     BrainPuzzleMinigame,
+    AbdomenMinigame,
 )
 
 
 # ── Region → Sub-minigame mapping ─────────────────────────────────────────
 # Add new minigames here as you create them
 REGION_MINIGAMES = {
-    "chest": ECGMinigame,
-    "head": BrainPuzzleMinigame,
-    "abdomen": ReactionMinigame,      # Replace with AbdomenMinigame when ready
-    "pelvis": PelvisMinigame,
-    "arm": ArmMinigame,
-    "spine": SpineMinigame,
-    "leg": LegMinigame,
+    "chest": ECGMinigame,          # ECG rhythm game for heart/lung conditions
+    "head": BrainPuzzleMinigame,   # Brain puzzle for head conditions
+    "abdomen": AbdomenMinigame,    # Suture line for abdomen
+    "pelvis": PelvisMinigame,      # Bone alignment for pelvis
+    "arm": ArmMinigame,            # Fracture repair for arm
+    "spine": SpineMinigame,        # Vertebrae stack for spine
+    "leg": LegMinigame,            # Fracture repair for leg
 }
 
 
@@ -125,12 +126,9 @@ class SurgeryMinigame:
         sub_result = sub.run()
         print(f"[SurgeryMinigame] Minigame result: {sub_result}")
 
-        # ── Phase 4: Apply penalties for wrong targeting attempts ─────────
-        # If player clicked wrong area 2 or more times, surgery fails
-        if wrong_attempts >= 2:
-            print(f"[SurgeryMinigame] Failed due to {wrong_attempts} wrong targeting attempts")
-            return False
-
+        # ── Phase 4: Return result ────────────────────────────────────────
+        # Wrong targeting attempts are informational only
+        # The minigame result determines success or failure
         print(f"[SurgeryMinigame] ========== run() COMPLETE - returning {sub_result} ==========")
         return sub_result
 

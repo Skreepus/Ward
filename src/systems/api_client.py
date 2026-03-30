@@ -106,8 +106,6 @@ Rules:
 - social_weight: if true, also set social_weight_label to one of:
   "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
   If false, set social_weight_label to null.
-- 
-- background is one sentence — who they are outside this hospital.
 
 Avoid these names (already in game): {existing_names}
 

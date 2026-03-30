@@ -9,6 +9,7 @@ from .arm_minigame import ArmMinigame
 from .leg_minigame import LegMinigame
 from .pelvis_minigame import PelvisMinigame
 from .brain_puzzle_minigame import BrainPuzzleMinigame
+from .abdomen_minigame import AbdomenMinigame
 
 
 __all__ = [
