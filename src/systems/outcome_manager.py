@@ -68,22 +68,6 @@ class OutcomeTracker:
         social_picks = sum(1 for r in self.records if r["chosen_social_weight"])
         return social_picks / len(self.records) > 0.5
 
-    def ignored_quiet_patients(self) -> bool:
-        """
-        True if the player consistently passed over patients
-        who had no family present and low social weight.
-        """
-        quiet_passed = 0
-        total_passed = 0
-        for r in self.records:
-            for p in r["passed"]:
-                total_passed += 1
-                if not p["social_weight"] and p["times_passed"] >= 1:
-                    quiet_passed += 1
-        if total_passed == 0:
-            return False
-        return quiet_passed / total_passed > 0.5
-
     def total_pressure(self, pressure: int) -> bool:
         """True if pressure accumulated enough to trigger the promotion ending."""
         return pressure >= 3
@@ -104,6 +88,7 @@ class OutcomeTracker:
         """
         Returns patients who were passed over, had no social weight,
         and no family present. Used for The Quiet Ones ending screen.
+        (Kept for reference, but ending is removed.)
         """
         return [
             p for p in all_patients
@@ -115,11 +100,11 @@ class OutcomeTracker:
     def compute_scores(self) -> dict:
         """
         Weighted scoring used by EndingDetector._score().
-        Returns clinical, social, quiet, and complaint scores.
+        Returns clinical, social, and complaint scores.
+        Quiet score removed.
         """
         clinical_score  = 0
         social_score    = 0
-        quiet_score     = 0
         complaint_score = 0
 
         for r in self.records:
@@ -135,20 +120,13 @@ class OutcomeTracker:
             if r["chosen_social_weight"]:
                 social_score += 3
 
-            # Quiet: passed over patients with no social weight multiple times
-            for p in r["passed"]:
-                if not p["social_weight"] and p["times_passed"] >= 1:
-                    quiet_score += 2
-
             # Complaint: minigame failed but patient survived
-            # something went wrong that shouldn't have
             if r["minigame_failed"] and r["survived"]:
                 complaint_score += 2
 
         return {
             "clinical":  clinical_score,
             "social":    social_score,
-            "quiet":     quiet_score,
             "complaint": complaint_score,
         }
 
@@ -159,6 +137,5 @@ class OutcomeTracker:
             "total_rounds":    len(self.records),
             "always_clinical": self.always_picked_highest_survivability(),
             "mostly_social":   self.mostly_picked_social_weight(),
-            "ignored_quiet":   self.ignored_quiet_patients(),
             "scores":          self.compute_scores(),
         }
