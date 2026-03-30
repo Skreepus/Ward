@@ -97,7 +97,7 @@ def _run_surgery(screen, fonts, chosen):
 
 
 def _show_outcome(screen, fonts, patient, survived, minigame_passed):
-    """Brief outcome screen shown after surgery resolves."""
+    """Brief outcome screen shown after surgery resolves. Waits for SPACE."""
     W, H = screen.get_size()
 
     if survived and minigame_passed:
@@ -121,17 +121,17 @@ def _show_outcome(screen, fonts, patient, survived, minigame_passed):
         sub = f"{patient['name']} did not survive."
         sub_col = (160, 80, 80)
 
-    end_time = pygame.time.get_ticks() + 2500
-    clock    = pygame.time.Clock()
+    clock = pygame.time.Clock()
+    waiting = True
 
-    while pygame.time.get_ticks() < end_time:
+    while waiting:
         clock.tick(60)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                return
+                waiting = False
 
         screen.fill((6, 6, 6))
 
@@ -288,7 +288,6 @@ def main():
                             background_thread    = None
                             prompt = Typewriter(
                                 f"Round {round_num}. New patients have arrived. "
-                                "The Patients you did not operate on last round are still here. Their conditions have worsened. "
                                 "Click on a patient card or press 1, 2 or 3 to select, "
                                 "then ENTER to confirm."
                             )
@@ -406,7 +405,6 @@ def main():
                             background_thread    = None
                             prompt = Typewriter(
                                 f"Round {round_num}. New patients have arrived. "
-                                "Patients who you did not operate on last round are still here. "
                                 "Click on a patient card or press 1, 2 or 3 to select, "
                                 "then ENTER to confirm."
                             )
