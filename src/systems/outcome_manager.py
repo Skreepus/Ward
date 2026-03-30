@@ -24,32 +24,32 @@ class OutcomeTracker:
             "round": round_number,
 
             # Who was treated
-            "chosen_id":           chosen_patient["id"],
-            "chosen_name":         chosen_patient["name"],
+            "chosen_id":            chosen_patient["id"],
+            "chosen_name":          chosen_patient["name"],
             "chosen_survivability": chosen_patient["survivability"],
-            "chosen_severity":     chosen_patient["severity"],
+            "chosen_severity":      chosen_patient["severity"],
             "chosen_social_weight": chosen_patient.get("social_weight", False),
-            "chosen_had_family":   chosen_patient.get("had_family_present", False),
-            "survived":            survived,
-            "minigame_failed":     minigame_failed,
+            "chosen_had_family":    chosen_patient.get("had_family_present", False),
+            "survived":             survived,
+            "minigame_failed":      minigame_failed,
 
             # Who was passed over
             "passed": [
                 {
-                    "id":           p["id"],
-                    "name":         p["name"],
+                    "id":            p["id"],
+                    "name":          p["name"],
                     "survivability": p["survivability"],
-                    "severity":     p["severity"],
+                    "severity":      p["severity"],
                     "social_weight": p.get("social_weight", False),
-                    "times_passed": p.get("times_passed", 0),
-                    "quote":        p.get("quote", ""),
+                    "times_passed":  p.get("times_passed", 0),
+                    "quote":         p.get("quote", ""),
                 }
                 for p in passed_patients
             ],
         })
 
     # ------------------------------------------------------------------
-    # Pattern analysis — used by ending_detector
+    # Pattern analysis — used by ending_detector scoring
     # ------------------------------------------------------------------
 
     def always_picked_highest_survivability(self) -> bool:
@@ -88,6 +88,10 @@ class OutcomeTracker:
         """True if pressure accumulated enough to trigger the promotion ending."""
         return pressure >= 3
 
+    def total_deaths_count(self, all_dead: list) -> int:
+        """Returns total number of dead patients."""
+        return len(all_dead)
+
     def get_dead_while_waiting(self, all_dead: list) -> list:
         """
         Returns patients who died waiting (never treated).
@@ -108,12 +112,53 @@ class OutcomeTracker:
             and p.get("times_passed", 0) >= 1
         ]
 
+    def compute_scores(self) -> dict:
+        """
+        Weighted scoring used by EndingDetector._score().
+        Returns clinical, social, quiet, and complaint scores.
+        """
+        clinical_score  = 0
+        social_score    = 0
+        quiet_score     = 0
+        complaint_score = 0
+
+        for r in self.records:
+            # Clinical: chose the highest survivability patient
+            all_survs = [p["survivability"] for p in r["passed"]]
+            all_survs.append(r["chosen_survivability"])
+            if r["chosen_survivability"] >= max(all_survs):
+                clinical_score += 2
+            else:
+                clinical_score -= 1
+
+            # Social: chose a patient with social weight
+            if r["chosen_social_weight"]:
+                social_score += 3
+
+            # Quiet: passed over patients with no social weight multiple times
+            for p in r["passed"]:
+                if not p["social_weight"] and p["times_passed"] >= 1:
+                    quiet_score += 2
+
+            # Complaint: minigame failed but patient survived
+            # something went wrong that shouldn't have
+            if r["minigame_failed"] and r["survived"]:
+                complaint_score += 2
+
+        return {
+            "clinical":  clinical_score,
+            "social":    social_score,
+            "quiet":     quiet_score,
+            "complaint": complaint_score,
+        }
+
     def summary(self) -> dict:
         """Full record dump for ending_detector."""
         return {
-            "records": self.records,
-            "total_rounds": len(self.records),
-            "always_clinical":      self.always_picked_highest_survivability(),
-            "mostly_social":        self.mostly_picked_social_weight(),
-            "ignored_quiet":        self.ignored_quiet_patients(),
+            "records":         self.records,
+            "total_rounds":    len(self.records),
+            "always_clinical": self.always_picked_highest_survivability(),
+            "mostly_social":   self.mostly_picked_social_weight(),
+            "ignored_quiet":   self.ignored_quiet_patients(),
+            "scores":          self.compute_scores(),
         }
