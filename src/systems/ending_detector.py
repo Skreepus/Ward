@@ -18,18 +18,6 @@ ENDINGS = {
             "Nothing about your decisions was incorrect."
         ),
     },
-    "the_quiet_ones": {
-        "id": "the_quiet_ones",
-        "title": "The Quiet Ones",
-        "subtitle": "The hospital considers your record exemplary.",
-        "body": (
-            "You finished your shift.\n"
-            "The patients you treated were grateful.\n\n"
-            "Some patients are not listed in your outcomes.\n"
-            "They are listed below.\n\n"
-            "They did not make a fuss."
-        ),
-    },
     "promoted": {
         "id": "promoted",
         "title": "Promoted",
@@ -108,11 +96,9 @@ class EndingDetector:
         return ending
 
     def _pick_ending(self) -> str:
-        # Use scores computed by the tracker
         scores       = self.summary.get("scores", {})
         clinical     = scores.get("clinical",  0)
         social       = scores.get("social",    0)
-        quiet        = scores.get("quiet",     0)
         complaint    = scores.get("complaint", 0)
 
         all_patients = self.patient_summary.get("all",     [])
@@ -134,10 +120,6 @@ class EndingDetector:
         if clinical >= 4 and social < 3:
             return "clinical_perfection"
 
-        # The Quiet Ones — consistently ignored quiet patients
-        if quiet >= 4:
-            return "the_quiet_ones"
-
         # Still On The List — someone is still waiting at end of shift
         if waiting:
             return "still_on_the_list"
@@ -155,10 +137,6 @@ class EndingDetector:
             return {
                 "died_waiting": died_waiting[0] if died_waiting else None
             }
-
-        if ending_id == "the_quiet_ones":
-            quiet = self.tracker.get_passed_no_family(all_patients)
-            return {"quiet_patients": quiet}
 
         if ending_id == "promoted":
             return {

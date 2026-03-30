@@ -4,13 +4,23 @@ import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from config import NUM_ROUNDS, ROUND_DURATION, TOTAL_RUNTIME
+
 from src.systems.patient_generator import PatientGenerator
 from src.systems.api_client import generate_family_moment
 
 
 class RoundManager:
-    def __init__(self):
+    def __init__(self, total_rounds=6, total_runtime=600, round_duration=60):
+        """
+        Parameters:
+            total_rounds: number of rounds in the game
+            total_runtime: total game time in seconds (optional fallback)
+            round_duration: time per round in seconds (kept for consistency)
+        """
+        self.NUM_ROUNDS = total_rounds
+        self.TOTAL_RUNTIME = total_runtime
+        self.ROUND_DURATION = round_duration
+
         self.current_round = 0
         self.game_start_time = None
         self.round_start_time = None
@@ -20,6 +30,7 @@ class RoundManager:
         self.pressure = 0            # accumulates when social_weight patients are passed
         self.family_queue = []       # pending family moment lines to show
         self.game_over = False
+        self.used_family_patients = set()   # track which patients already had a family moment
 
     # ------------------------------------------------------------------
     # Core round flow
@@ -36,7 +47,7 @@ class RoundManager:
         """
         self.current_round += 1
         self.round_start_time = time.time()
-        print(f"[RoundManager] Starting round {self.current_round}/{NUM_ROUNDS}")
+        print(f"[RoundManager] Starting round {self.current_round}/{self.NUM_ROUNDS}")
         self.current_patients = self.patient_generator.get_round_patients(self.current_round)
         return self.current_patients
 
@@ -74,8 +85,8 @@ class RoundManager:
 
         return {
             "chosen_patient": chosen_patient,
-            "family_patient": family_patient,   # <-- which patient the family belongs to
-            "family_line": family_line,         # <-- the line of dialogue
+            "family_patient": family_patient,   # which patient the family belongs to
+            "family_line": family_line,         # the line of dialogue
             "pressure": self.pressure,
             "round": self.current_round,
         }
@@ -87,43 +98,53 @@ class RoundManager:
 
     def is_game_over(self) -> bool:
         """True if all rounds done or total time exceeded."""
-        time_exceeded = (time.time() - self.game_start_time) >= TOTAL_RUNTIME
-        rounds_done = self.current_round >= NUM_ROUNDS
+        if self.game_start_time is None:
+            return False
+        time_exceeded = (time.time() - self.game_start_time) >= self.TOTAL_RUNTIME
+        rounds_done = self.current_round >= self.NUM_ROUNDS
         return time_exceeded or rounds_done
 
     def time_remaining(self) -> float:
         """Seconds left in the total game."""
         if not self.game_start_time:
-            return TOTAL_RUNTIME
-        return max(0, TOTAL_RUNTIME - (time.time() - self.game_start_time))
+            return self.TOTAL_RUNTIME
+        return max(0, self.TOTAL_RUNTIME - (time.time() - self.game_start_time))
 
     def round_time_remaining(self) -> float:
         """Seconds left in the current round."""
         if not self.round_start_time:
-            return ROUND_DURATION
-        return max(0, ROUND_DURATION - (time.time() - self.round_start_time))
+            return self.ROUND_DURATION
+        return max(0, self.ROUND_DURATION - (time.time() - self.round_start_time))
 
     # ------------------------------------------------------------------
     # Family moment
     # ------------------------------------------------------------------
 
     def _maybe_generate_family_moment(self, chosen_patient: dict, passed_ids: list) -> tuple | None:
-        """Returns (patient, line) or None if no moment is triggered."""
-        if False:  
+        """
+        Returns (patient, line) or None if no moment is triggered.
+        Excludes patients who were ever treated, and ensures each patient gets at most one moment.
+        Also skips if this is the final round (to avoid delaying ending).
+        """
+        # Skip if this is the last round (game will end after this surgery)
+        if self.current_round >= self.NUM_ROUNDS:
             return None
 
-        waiting = self.patient_generator.waiting
-        if not waiting:
+        if random.random() > 1:   #100% chance
             return None
 
-        target = random.choice(waiting)
-
+        all_patients = self.patient_generator.all_patients
         treated_ids = [p['id'] for p in self.patient_generator.treated]
-        dead_ids = [p['id'] for p in self.patient_generator.dead]
+        # Exclude patients who already had a family moment
+        eligible = [p for p in all_patients if p['id'] not in treated_ids and p['id'] not in self.used_family_patients]
+        if not eligible:
+            return None
 
-        if target['id'] in treated_ids:
-            status = "treated"
-        elif target['id'] in dead_ids:
+        target = random.choice(eligible)
+        self.used_family_patients.add(target['id'])
+
+        dead_ids = [p['id'] for p in self.patient_generator.dead]
+        if target['id'] in dead_ids:
             status = "died"
         elif target['id'] in passed_ids:
             status = "passed_over"
@@ -133,6 +154,7 @@ class RoundManager:
         print(f"[RoundManager] Generating family moment for {target['name']} ({status})...")
         line = generate_family_moment(target, status)
         return (target, line)
+
     # ------------------------------------------------------------------
     # Summary for ending detector
     # ------------------------------------------------------------------

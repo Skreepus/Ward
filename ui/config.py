@@ -28,3 +28,5 @@ CARD_PAD = 20
 
 # Font names
 FONT_MONO = "couriernew"
+
+NUM_ROUNDS = 6
