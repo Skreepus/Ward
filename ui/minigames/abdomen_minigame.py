@@ -669,6 +669,6 @@ class AbdomenMinigame(BaseMinigame):
         pygame.draw.rect(self.screen, (0, 0, 0, 150), bg_rect, border_radius=4)
         pygame.draw.rect(self.screen, ACCENT_COL, bg_rect, 1, border_radius=4)
         self.screen.blit(inst_surf, ((W - inst_surf.get_width()) // 2, H - 75))
-        skip_text = "Press P to skip minigame (testing)"
+        skip_text = "Press P to skip minigame"
         skip_surf = self.fonts['small'].render(skip_text, True, MUTED_COL)
         self.screen.blit(skip_surf, ((W - skip_surf.get_width()) // 2, H - 45))

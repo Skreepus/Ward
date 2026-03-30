@@ -6,7 +6,7 @@ from .config import (
 )
 
 def draw_patient_card(surf, x, y, patient, selected=False, index=1, fonts=None, hovered=False):
-    """Draw an individual patient card with improved design"""
+    """Draw an individual patient card with background info and quote"""
     if fonts is None:
         from .fonts import init_fonts
         fonts = init_fonts()
@@ -43,12 +43,12 @@ def draw_patient_card(surf, x, y, patient, selected=False, index=1, fonts=None, 
 
     cy += 38
 
-    # Name + age - larger, more prominent
+    # Name + age
     name_surf = fonts['title'].render(f"{patient['name']}, {patient['age']}", True, OFF_WHITE)
     surf.blit(name_surf, (cx, cy))
     cy += 30
 
-    # Condition - medium size, muted color
+    # Condition
     cond_surf = fonts['medium'].render(patient["condition"], True, MUTED)
     surf.blit(cond_surf, (cx, cy))
     cy += 28
@@ -67,11 +67,11 @@ def draw_patient_card(surf, x, y, patient, selected=False, index=1, fonts=None, 
     severity_5 = max(1, min(5, (severity + 1) // 2))
     
     severity_colors = {
-        1: (255, 255, 150),   # Light Yellow
-        2: (255, 200, 100),   # Orange-Yellow  
-        3: (255, 150, 50),    # Orange
-        4: (220, 80, 40),     # Dark Orange-Red
-        5: (160, 30, 30),     # Deep Red
+        1: (255, 255, 150),
+        2: (255, 200, 100),
+        3: (255, 150, 50),
+        4: (220, 80, 40),
+        5: (160, 30, 30),
     }
     
     bar_color = severity_colors[severity_5]
@@ -89,22 +89,42 @@ def draw_patient_card(surf, x, y, patient, selected=False, index=1, fonts=None, 
     
     cy += 22
 
-    # Survivability - SMALLER TEXT, NO COLOR
+    # Survivability
     pct = patient["survivability"]
     pct_surf = fonts['percent'].render(f"{pct}% survival with treatment", True, MUTED)
     surf.blit(pct_surf, (cx, cy))
     cy += 28
 
-    # Quote - FIXED TEXT WRAPPING with wider width
+    # BACKGROUND (short description of patient's life) - NO LABEL
+    background = patient.get("background", "")
+    
+    if background and background.strip():
+        # Wrap background text with wider width
+        wrapped_bg = textwrap.wrap(background, width=44)
+        # Show up to 4 lines of background
+        for i, line in enumerate(wrapped_bg[:4]):
+            bg_surf = fonts['small'].render(line, True, (185, 185, 155))
+            surf.blit(bg_surf, (cx, cy))
+            cy += 16
+    else:
+        fallback_surf = fonts['small'].render("No background information available.", True, MUTED)
+        surf.blit(fallback_surf, (cx, cy))
+        cy += 16
+    cy += 4
+
+    # QUOTE (patient's quote) - NO LABEL
     quote = f'"{patient["quote"]}"'
-    # Increased wrap width to 45 characters to prevent orphaned words
-    wrapped = textwrap.wrap(quote, width=45)
-    for line in wrapped[:2]:
-        q_surf = fonts['small'].render(line, True, (185, 185, 155))
+    wrapped_quote = textwrap.wrap(quote, width=44)
+    
+    for line in wrapped_quote[:2]:
+        q_surf = fonts['small'].render(line, True, OFF_WHITE)
         surf.blit(q_surf, (cx, cy))
         cy += 18
 
-    # Social flag
+    # Add spacing before social flag
+    cy += 8
+
+    # Social flag - positioned after quote
     flag_text = None
     if patient.get("flag") == "donor":
         flag_text = "▲ HOSPITAL DONOR"
@@ -113,4 +133,4 @@ def draw_patient_card(surf, x, y, patient, selected=False, index=1, fonts=None, 
     
     if flag_text:
         flag_surf = fonts['small'].render(flag_text, True, (180, 150, 80))
-        surf.blit(flag_surf, (cx, y + CARD_H - CARD_PAD - 18))
+        surf.blit(flag_surf, (cx, cy))

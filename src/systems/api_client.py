@@ -24,20 +24,10 @@ def _call(prompt: str, system: str = None) -> str:
 def _repair_json(text: str) -> str:
     """
     Repair common JSON errors produced by LLMs.
-
-    The primary bug seen in production (from the error logs):
-    The API omits the closing } of an object before the comma that
-    separates it from the next object in an array:
-
-        BAD:   "background": "..."\n  ,\n  {
-        GOOD:  "background": "..."\n  },\n  {
-
-    Fix 1 — insert missing } before a comma that directly precedes {
-    Fix 2 — strip trailing commas before } or ] (also common)
     """
-    # Fix 1: missing closing brace before comma + new object
+    # Fix missing closing brace before comma + new object
     text = re.sub(r'(?<![}\]])(\s*),(\s*\{)', r'}\1,\2', text)
-    # Fix 2: trailing commas before closing brace or bracket
+    # Fix trailing commas before closing brace or bracket
     text = re.sub(r',\s*([}\]])', r'\1', text)
     return text
 
@@ -55,13 +45,13 @@ def _call_json(prompt: str, system: str = None) -> dict | list:
     end = max(cleaned.rfind(']'), cleaned.rfind('}')) + 1
     cleaned = cleaned[start:end]
 
-    # First attempt — parse as-is (no repair overhead for clean responses)
+    # First attempt — parse as-is
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
         print(f"[API] JSON parse error (attempting repair): {e}")
 
-    # Second attempt — repair common LLM JSON mistakes and re-parse
+    # Second attempt — repair common JSON mistakes
     repaired = _repair_json(cleaned)
     try:
         result = json.loads(repaired)
@@ -90,7 +80,7 @@ Generate {2 if round_number > 3 else 3} hospital patients for round {round_numbe
 
 Rules:
 - Patients are specific, ordinary people 
-- It should be more common for patients to be children/teenagers, middle aged or elderly.
+- It should be more common for patients to be children/teenagers, middle aged or elderly(above the age of 80).
 - Names for the patients must be unique. No repeats of names.
 - The names should be multicultural, not only caucasian surnames.
 - One patient should have medium survivability (55-70%), one high (90-99%)
@@ -102,10 +92,16 @@ Rules:
 - spine, pelvis, head regions for conditions are most common. chest and abdomen are common. arm and leg are uncommon.
 - quote is one short sentence. Something true about them right now. It should be very dependent on the conditon they are in.
   Good: "I'm sorry for all the fuss.", "It hurts so bad", "Can someone water my plants?", "I have a daughter... where is she?"
-- Do not generate too many individuals with social weight.
+- background: one short sentence of who they are. one short sentence of what they were doing. Make it personal. background MUST be less than 30 words
+  Examples: "A retired librarian who lives alone. She was found unconscious in her garden."
+  "An accountant who works too many hours. He has chronic back pain. He was at his computer when he felt a sharp pain in his spine"
+  "A botanist with no prior medical history. She was unpacking boxes when she fell on her outstretched hand."
+- Do not have many individuals with social weight, it should be rare.
 - social_weight: if true, also set social_weight_label to one of:
-  "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "BOARD MEMBER"
-  If false, set social_weight_label to null.
+  "HOSPITAL DONOR", "CITY COUNCILLOR", "SURGEON'S COLLEAGUE", "HEALTH MINISTRY ADVISOR"
+    If false, set social_weight_label to null.
+- severity is 1-10. hand and foot related conditions should always start at the lowest severity.
+- survivability is 0-100 (percent with treatment).
 
 Avoid these names (already in game): {existing_names}
 
@@ -122,12 +118,12 @@ Return a JSON array with this exact structure:
     "quote": "One sentence.",
     "times_passed": 0,
     "social_weight": false,
-    "social_weight_label": null
-    
+    "social_weight_label": null,
+    "background": "One or two sentences about who they are."
   }}
 ]
 
-severity is 1-10. survivability is 0-100 (percent with treatment).
+
 """
     return _call_json(prompt, system)
 
@@ -147,7 +143,7 @@ def _get_fallback_patients(round_number: int) -> list:
             "times_passed": 0,
             "social_weight": False,
             "social_weight_label": None,
-            "background": "A retired librarian who lives alone with her cat."
+            "background": "A retired librarian who lives alone with her cat. She was gardening when the chest pain started."
         },
         {
             "id": f"fallback_2_{round_number}",
@@ -161,7 +157,7 @@ def _get_fallback_patients(round_number: int) -> list:
             "times_passed": 0,
             "social_weight": False,
             "social_weight_label": None,
-            "background": "An accountant who works too many hours."
+            "background": "An accountant who works too many hours. He was at his desk when the pain started."
         },
         {
             "id": f"fallback_3_{round_number}",
@@ -175,7 +171,7 @@ def _get_fallback_patients(round_number: int) -> list:
             "times_passed": 0,
             "social_weight": False,
             "social_weight_label": None,
-            "background": "A botanist who just moved to the city."
+            "background": "A botanist who just moved to the city. She was unpacking boxes when she collapsed."
         },
     ]
     # Return 2 or 3 patients based on round number
@@ -233,16 +229,63 @@ def generate_family_moment(patient: dict, status: str) -> str:
         "Present tense. No markdown. Make it feel real, not melodramatic."
     )
 
-    # Determine family relation based on patient's age
+    # Simple gender inference from name
+    def _guess_gender(name: str) -> str:
+        """Infer gender from name (simple heuristic)"""
+        name_lower = name.lower()
+        female_endings = ['a', 'ia', 'na', 'ara', 'elle', 'ine', 'lyn', 'e']
+        male_endings = ['o', 'us', 'er', 'an', 'en', 'on', 'el', 'y', 'ie', 'k']
+        
+        for ending in female_endings:
+            if name_lower.endswith(ending):
+                return "female"
+        for ending in male_endings:
+            if name_lower.endswith(ending):
+                return "male"
+        return "unknown"
+
+    # Get patient gender
+    patient_gender = patient.get("gender", "")
+    if not patient_gender:
+        patient_gender = _guess_gender(patient.get("name", ""))
+
     age = patient.get('age', 40)
+    
+    # Determine family relation based on patient's age and gender (opposite gender only for spouse)
     if age < 18:
-        relation = random.choice(['father', 'mother', 'parent'])
+        # Child patient
+        relation_options = ['father', 'mother']
+        relation = random.choice(relation_options)
+        
     elif age < 35:
-        relation = random.choice(['mother', 'father', 'partner', 'sister', 'brother', 'fiancé', 'fiancée'])
+        # Young adult
+        if patient_gender == "male":
+            relation_options = ['mother', 'father', 'sister', 'brother', 'fiancée']
+        elif patient_gender == "female":
+            relation_options = ['mother', 'father', 'sister', 'brother', 'fiancé']
+        else:
+            relation_options = ['mother', 'father', 'sister', 'brother']
+        relation = random.choice(relation_options)
+        
     elif age < 55:
-        relation = random.choice(['wife', 'husband', 'partner', 'daughter', 'son', 'sister', 'brother'])
+        # Middle aged
+        if patient_gender == "male":
+            relation_options = ['wife', 'daughter', 'son', 'sister', 'brother']
+        elif patient_gender == "female":
+            relation_options = ['husband', 'daughter', 'son', 'sister', 'brother']
+        else:
+            relation_options = ['daughter', 'son', 'sister', 'brother']
+        relation = random.choice(relation_options)
+        
     else:
-        relation = random.choice(['daughter', 'son', 'wife', 'husband', 'granddaughter', 'grandson'])
+        # Elderly
+        if patient_gender == "male":
+            relation_options = ['wife', 'daughter', 'son', 'granddaughter', 'grandson']
+        elif patient_gender == "female":
+            relation_options = ['husband', 'daughter', 'son', 'granddaughter', 'grandson']
+        else:
+            relation_options = ['daughter', 'son', 'granddaughter', 'grandson']
+        relation = random.choice(relation_options)
 
     prompt = f"""
 Write a scene where the doctor returns to the emergency ward after surgery.

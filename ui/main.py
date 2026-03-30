@@ -24,7 +24,7 @@ from src.systems.ending_detector import EndingDetector
 # DEBUG SETTINGS
 # ============================================
 
-SKIP_LOADING_SCREEN = False   
+SKIP_LOADING_SCREEN = True   
 
 
 TITLE_BG = "title_screen.png"

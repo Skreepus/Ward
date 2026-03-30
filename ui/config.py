@@ -23,7 +23,7 @@ CARD_SEL_BDR = (148, 148, 72)
 
 # Card dimensions
 CARD_W = 380
-CARD_H = 300
+CARD_H = 320
 CARD_PAD = 20
 
 # Font names
