@@ -21,11 +21,11 @@ BRIEFING = [
     ("You were called in.", 1.8),
     ("You did not ask why.", 1.4),
     ("", 0.6),
-    ("One window. One Theatre", 1.8),
+    ("One window. One Theatre.", 1.8),
     ("One surgeon on call.", 2.2),
     ("", 0.6),
     ("", 0.5),
-    ("Time to clock in", 2.8),
+    ("Time to clock in.", 2.8),
 ]
 
 class LoadingScreen:
