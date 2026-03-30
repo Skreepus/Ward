@@ -23,12 +23,9 @@ from src.systems.ending_detector import EndingDetector
 # ============================================
 # DEBUG SETTINGS
 # ============================================
-<<<<<<< Updated upstream
-SKIP_LOADING_SCREEN = True   # Set to True to skip the initial loading screen
-=======
-SKIP_LOADING_SCREEN = False
->>>>>>> Stashed changes
-# ============================================
+
+SKIP_LOADING_SCREEN = False   
+
 
 TITLE_BG = "title_screen.png"
 WARD_BG  = "hospital4pixel.png"
