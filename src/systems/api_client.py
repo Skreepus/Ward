@@ -89,7 +89,7 @@ Rules:
   examples in the form: "condition" -> "region"
   Good: "Ruptured appendix" -> "abdomen", "Aortic dissection" → "chest", "Herniated disc" -> spine, "Achilles Tendinopathy" -> leg, "Cerebral aneurysm" -> "head", "Osteitis Pubis" -> "pelvis", "Radial tunnel syndrome" -> "arm".
   Bad: "Severe Sepsis from perforated bowel"
-- spine, pelvis, head regions for conditions are most common. chest and abdomen are common. arm and leg are uncommon.
+- spine, pelvis, head regions for conditions are most common. chest and abdomen are common. arm and leg problems should be rare.
 - quote is one short sentence. Something true about them right now. It should be very dependent on the conditon they are in.
   Good: "I'm sorry for all the fuss.", "It hurts so bad", "Can someone water my plants?", "I have a daughter... where is she?"
 - background: one short sentence of who they are. one short sentence of what they were doing. Make it personal. background MUST be less than 30 words

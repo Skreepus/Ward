@@ -42,7 +42,7 @@ ENDINGS = {
             "They are still in the system.\n"
             "Their file has been passed to the next doctor.\n\n"
             "They were on the list when you arrived.\n"
-            "They are on the list now."
+            "They are still on the list now."
         ),
     },
     "ghosts": {

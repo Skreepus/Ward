@@ -25,15 +25,10 @@ from src.systems.ending_detector import EndingDetector
 # ============================================
 SKIP_LOADING_SCREEN = False
 
-<<<<<<< HEAD
-SKIP_LOADING_SCREEN = True   
-
-=======
 # Game settings
 NUM_ROUNDS = 6
 TOTAL_RUNTIME = 600   # seconds (10 minutes)
 ROUND_DURATION = 60   # seconds per round
->>>>>>> 6b1ff4356577abb87c63543776ade181b8c76981
 
 TITLE_BG = "title_screen.png"
 WARD_BG  = "hospital4pixel.png"
@@ -163,7 +158,6 @@ def _trigger_ending(screen, fonts, outcome_tracker, round_manager):
         round_manager.pressure,
         patient_summary,
         total_deaths=total_deaths,
-        # family_moments removed because ending_detector may not accept it
     )
     ending_data = ending_detector.detect()
     print(f"[Main] Ending determined: {ending_data['title']}")
@@ -294,6 +288,7 @@ def main():
                             background_thread    = None
                             prompt = Typewriter(
                                 f"Round {round_num}. New patients have arrived. "
+                                "The Patients you did not operate on last round are still here. Their conditions have worsened. "
                                 "Click on a patient card or press 1, 2 or 3 to select, "
                                 "then ENTER to confirm."
                             )
@@ -411,6 +406,7 @@ def main():
                             background_thread    = None
                             prompt = Typewriter(
                                 f"Round {round_num}. New patients have arrived. "
+                                "Patients who you did not operate on last round are still here. "
                                 "Click on a patient card or press 1, 2 or 3 to select, "
                                 "then ENTER to confirm."
                             )
